@@ -206,7 +206,7 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 | `set_tasks` 的工具定義（每次對話請求都會帶） | 約 **273 token** | **實測**：`/context` 的 MCP tools 那一列 |
 | 每次 Claude 呼叫 `set_tasks` 回報進度 | 約 150 到 300 token | **估計**：沒有用計數器驗證 |
 | 進度條、動畫、計時、轉圈提示上的任務進度、樣式與配色 | 0 token | 全部在本機畫面上執行，不會送給模型 |
-| `update_plan`、`TodoWrite`、`TaskCreate`/`TaskUpdate` 的監聽 | 0 token | 這些工具本來就在工具清單裡，mod 只是讀取它們的呼叫 |
+| 讀取 `update_plan`、`TodoWrite`、`TaskCreate`/`TaskUpdate` 的任務清單 | 0 token | 這些工具本來就在工具清單裡，mod 只是用它們已經建立的任務標題與狀態來畫面板 |
 
 ### 怎麼算
 
@@ -239,6 +239,28 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 什麼時候適合開：這個 session 大多不需要進度條（問答、改一行程式）。什麼時候別開：長任務、會一直回報進度，因為載入後定義還是會留在每次請求裡，還多了一次載入，省不到，Claude 也比較容易忘記用它。
 
 這個指令是斜線指令，在終端機和桌面版的 Code 分頁都可以用。網頁版（claude.ai/code）我沒有測過，不確定 plugin 的指令是否可用。
+
+## 隱私與安全
+
+這個 plugin 只拿**任務清單**來畫進度面板，下面是它實際做的事，以及你怎麼自己驗證。
+
+**它讀什麼：** Claude 用 `update_plan`、`TodoWrite`、`TaskCreate`/`TaskUpdate` 或 `set_tasks` 建立的任務，也就是每個任務的**標題**和**狀態**（待辦、進行中、已完成）。
+
+**它不讀什麼：** 你的對話內容、檔案、程式碼、命令的輸出。你送出新提問時，它只做一件事：把面板上的舊任務清掉，不會讀你提問的文字。
+
+**它不做什麼：**
+- 不連網，不上傳或傳送任何資料給任何人。
+- 不讀寫你的檔案，不執行任何命令。
+- 不自己呼叫模型。
+
+**你可以自己驗證：**
+- 全部程式只有一個檔案：`hooks/register.tsx`，約六百行，可以直接讀。
+- 執行 `claude plugin validate <資料夾>`，引擎會列出這個 plugin 用到的所有功能。目前只有：計時器、讀取目前時間、註冊斜線指令與 `set_tasks` 工具、讀寫這個 session 的任務狀態、一個本機設定值（省 token 開關）、畫面元件。沒有檔案、命令、網路的項目。
+- 唯一會留存的資料是 `/task-progress saver` 的開關（一個開或關），存在 Claude Code 的 plugin 儲存空間。任務本身只存在這個 session 裡。
+
+**兩個要誠實說明的技術細節：**
+1. 為了認得桌面版的 `update_plan`，這個 plugin 掛了一個「每次工具呼叫都會經過」的處理程式。它只看工具的名稱，不是上面那幾個任務工具就原樣放行，不會讀其他工具的內容。
+2. 程式裡有一個 `prompt.compose` 處理程式，原本是要在系統提示加一小段「請用 `set_tasks`」的指示。目前版本的 Claude Code 會把它跳過，所以不會執行。如果你不放心，可以直接把它刪掉，不影響其他功能。
 
 ## 疑難排解
 
