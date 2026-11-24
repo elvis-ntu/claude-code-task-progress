@@ -1,0 +1,79 @@
+{
+  "name": "task-progress",
+  "version": "0.1.0",
+  "description": "在輸入框上方顯示每個任務的進度條、百分比與預估剩餘時間。",
+  "types": "./types/index.d.ts",
+  "userConfig": {
+    "barStyle": {
+      "type": "string",
+      "title": "進度條樣式",
+      "description": "solid=實心色塊；blocks=█░；dots=●○；line=━─；segments=▰▱；ascii=[##--]；桌面版專用 SVG：candy=光澤圓角加圖示、stripes=斜紋膠囊、glossy=分格漸層、neon=發光管狀（終端機自動退回字元樣式）",
+      "default": "solid",
+      "options": [
+        "solid",
+        "blocks",
+        "dots",
+        "line",
+        "segments",
+        "ascii",
+        "candy",
+        "stripes",
+        "glossy",
+        "neon"
+      ]
+    },
+    "iconSet": {
+      "type": "string",
+      "title": "圖示組",
+      "description": "symbols=✓●○；emoji=✅🔄⏳；circles=●◐○；minimal=+>-；none=不顯示",
+      "default": "symbols",
+      "options": [
+        "symbols",
+        "emoji",
+        "circles",
+        "minimal",
+        "none"
+      ]
+    },
+    "layout": {
+      "type": "string",
+      "title": "版面",
+      "description": "detailed=逐項顯示；compact=單行摘要；header=只顯示整體進度",
+      "default": "detailed",
+      "options": [
+        "detailed",
+        "compact",
+        "header"
+      ]
+    },
+    "theme": {
+      "type": "string",
+      "title": "配色主題",
+      "description": "default / ocean / sunset / neon / mono",
+      "default": "default",
+      "options": [
+        "default",
+        "ocean",
+        "sunset",
+        "neon",
+        "mono"
+      ]
+    },
+    "trackStyle": {
+      "type": "string",
+      "title": "未完成部分的樣式",
+      "description": "filled=灰底；dashed=灰色虛線",
+      "default": "filled",
+      "options": [
+        "filled",
+        "dashed"
+      ]
+    }
+  },
+  "license": "MIT",
+  "author": {
+    "name": "elvis-ntu"
+  },
+  "homepage": "https://github.com/elvis-ntu/claude-code-task-progress",
+  "repository": "https://github.com/elvis-ntu/claude-code-task-progress"
+}
