@@ -68,12 +68,16 @@
         "filled",
         "dashed"
       ]
+    },
+    "showWorking": {
+      "type": "string",
+      "title": "顯示「處理中」列",
+      "description": "on=Claude 處理時顯示處理中與經過秒數；off=只顯示任務",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
     }
-  },
-  "license": "MIT",
-  "author": {
-    "name": "elvis-ntu"
-  },
-  "homepage": "https://github.com/elvis-ntu/claude-code-task-progress",
-  "repository": "https://github.com/elvis-ntu/claude-code-task-progress"
+  }
 }

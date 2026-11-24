@@ -13,6 +13,6 @@ export type ProgressTask = {
 
 declare module 'claude-code' {
   interface PluginState {
-    'task-progress': { tasks: ProgressTask[] }
+    'task-progress': { tasks: ProgressTask[]; turnStartedAt: number | null; tick: number }
   }
 }

@@ -4,11 +4,41 @@ import type { ElementConstructor, Register, SvgProps } from 'claude-code'
 import type { ProgressTask } from '../types'
 
 const tasksAtom = atom({ plugin: 'task-progress', key: 'tasks' } as const, [] as ProgressTask[])
+// 本輪（一次提問到回答結束）開始的時間；沒有在處理時為 null
+const turnAtom = atom({ plugin: 'task-progress', key: 'turnStartedAt' } as const, null as number | null)
+// 處理中每秒加一，讓面板重畫（計時與動畫）
+const tickAtom = atom({ plugin: 'task-progress', key: 'tick' } as const, 0)
 
 export const register: Register = (on, options) => {
   const style = readStyle(options)
+  // 新的提問：上一件工作若已全部完成，就把舊任務清掉（沒做完的保留）
+  on('prompt.submit', async ($, e, next) => {
+    await update($, tasksAtom, prev =>
+      prev.length > 0 && prev.every(t => t.status === 'completed') ? [] : prev,
+    )
+    return next(e)
+  })
+
+  // 一輪處理的開始與結束（只看主對話，不看子代理）
+  on('turn.start', async ($, e, next) => {
+    if ((e as { agentId?: string }).agentId === undefined) {
+      const at = await $.clock.now()
+      await update($, turnAtom, () => at)
+    }
+    return next(e)
+  })
+  on('turn.complete', async ($, e, next) => {
+    if ((e as { agentId?: string }).agentId === undefined) await update($, turnAtom, () => null)
+    return next(e)
+  })
+
   // /task-progress demo：填入範例任務；/task-progress clear：清空
   on('session.start', async ($, e, next) => {
+    $.clock.every(1000, () => {
+      void read($, turnAtom).then(t => {
+        if (t !== null) void update($, tickAtom, n => n + 1)
+      })
+    })
     await $.tool.register({
       name: 'set_tasks',
       description:
@@ -153,7 +183,9 @@ export const register: Register = (on, options) => {
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
     const tasks = await read($, tasksAtom)
-    if (e.props.hasSurvey || tasks.length === 0) return next(e)
+    const startedAt = style.working ? await read($, turnAtom) : null
+    const tick = await read($, tickAtom)
+    if (e.props.hasSurvey || (tasks.length === 0 && startedAt === null)) return next(e)
 
     const now = await $.clock.now()
     const { Box, Text } = $.ui.resolve(e)
@@ -163,7 +195,7 @@ export const register: Register = (on, options) => {
     const th = THEMES[style.theme] ?? THEMES.default!
     const ic = ICONS[style.icons] ?? ICONS.symbols!
     const nameW = Math.max(10, Math.min(30, e.props.bodyColumns - BAR_W - 28))
-    const total = tasks.reduce((s, t) => s + eff(t), 0) / tasks.length
+    const total = tasks.length === 0 ? 0 : tasks.reduce((s, t) => s + eff(t), 0) / tasks.length
     const doneN = tasks.filter(t => t.status === 'completed').length
     const color = (st: Status) => (st === 'completed' ? th.done : st === 'in_progress' ? th.active : th.pending)
 
@@ -201,7 +233,26 @@ export const register: Register = (on, options) => {
     }
 
     const header = `任務進度 ${doneN}/${tasks.length}  ${Math.round(total)}%`
+    const elapsed = startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000))
+    // 不確定總量的進度，不給百分比：只畫一段來回移動的亮塊，旁邊是真實經過的秒數
+    const sweep = () => {
+      const w = BAR_W
+      const seg = 4
+      const span = w - seg
+      const k = tick % (span * 2)
+      const pos = k <= span ? k : span * 2 - k
+      return (
+        <Box width={w + 2}>
+          <Text color={th.pending}>{'┄'.repeat(pos)}</Text>
+          <Text color={th.active} bold>{'━'.repeat(seg)}</Text>
+          <Text color={th.pending}>{'┄'.repeat(w - seg - pos)}</Text>
+        </Box>
+      )
+    }
+    const spin = ['◐', '◓', '◑', '◒'][tick % 4] ?? '◐'
     const eta = overallEta(tasks)
+
+    if (tasks.length === 0 && style.layout !== 'detailed') return next(e)
 
     if (style.layout === 'compact') {
       const cur = tasks.find(t => t.status === 'in_progress') ?? tasks.find(t => t.status === 'pending')
@@ -233,6 +284,25 @@ export const register: Register = (on, options) => {
     const shown = tasks.slice(-MAX_ROWS)
     const hidden = tasks.length - shown.length
     const iconW = style.icons === 'none' ? 0 : 3
+    const workingRow =
+      startedAt === null ? null : (
+        <Box key="working" gap={1}>
+          {iconW > 0 ? (
+            <Box width={iconW}>
+              <Text color={th.active}>{spin}</Text>
+            </Box>
+          ) : null}
+          <Box width={nameW}>
+            <Text wrap="truncate-end">處理中</Text>
+          </Box>
+          {sweep()}
+          <Box width={5}>
+            <Text bold>—</Text>
+          </Box>
+          <Text dimColor>{`已 ${elapsed}s`}</Text>
+        </Box>
+      )
+    if (tasks.length === 0) return <Box flexDirection="column" paddingX={1}>{workingRow}</Box>
 
     return (
       <Box flexDirection="column" paddingX={1}>
@@ -268,6 +338,7 @@ export const register: Register = (on, options) => {
             </Box>
           )
         })}
+        {workingRow}
       </Box>
     )
   })
@@ -304,7 +375,7 @@ const THEMES: Record<string, { done: string; active: string; pending: string; tr
   mono: { done: '#e2e8f0', active: '#ffffff', pending: '#718096', track: '#2d2d2d' },
 }
 
-type Style = { bar: string; icons: string; layout: string; theme: string; track: string }
+type Style = { bar: string; icons: string; layout: string; theme: string; track: string; working: boolean }
 
 function pick(v: unknown, allowed: readonly string[], fallback: string): string {
   return typeof v === 'string' && allowed.includes(v) ? v : fallback
@@ -317,6 +388,7 @@ function readStyle(o: Readonly<Record<string, unknown>> | undefined): Style {
     layout: pick(o?.layout, ['detailed', 'compact', 'header'], 'detailed'),
     theme: pick(o?.theme, Object.keys(THEMES), 'default'),
     track: pick(o?.trackStyle, ['filled', 'dashed'], 'filled'),
+    working: pick(o?.showWorking, ['on', 'off'], 'on') === 'on',
   }
 }
 
