@@ -21,11 +21,9 @@ export const register: Register = (on, options) => {
     return { sections: [...result.sections, { id: 'task-progress:guide', scope: 'session', text: GUIDE }] }
   })
 
-  // 新的提問：上一件工作若已全部完成，就把舊任務清掉（沒做完的保留）
+  // 新的提問就是新的一件工作：清掉上一件留下的所有任務，不論有沒有做完（還需要的，Claude 會重新回報）
   on('prompt.submit', async ($, e, next) => {
-    await update($, tasksAtom, prev =>
-      prev.length > 0 && prev.every(t => t.status === 'completed') ? [] : prev,
-    )
+    await update($, tasksAtom, () => [])
     return next(e)
   })
 
@@ -117,6 +115,28 @@ export const register: Register = (on, options) => {
   })
 
   on('tool.call', async ($, e, next) => {
+    if ((e.tool as string) === 'mcp__ccd_turn__update_plan') {
+      const ran = await next(e)
+      if (ran.deny !== undefined || ran.isError === true) return ran
+      const plan = e as unknown as { items?: { content?: string; status?: string }[] }
+      const items = (plan.items ?? []).filter(i => typeof i.content === 'string' && i.content !== '')
+      const at = await $.clock.now()
+      await update($, tasksAtom, prev =>
+        items.map(i => {
+          const status: ProgressTask['status'] =
+            i.status === 'completed' || i.status === 'in_progress' ? i.status : 'pending'
+          const old = prev.find(p => p.title === i.content)
+          // update_plan 沒有 done/total，進行中的任務不會有真實百分比
+          return {
+            title: i.content ?? '',
+            status,
+            startedAt: status === 'pending' ? null : (old?.startedAt ?? at),
+            doneAt: status === 'completed' ? (old?.doneAt ?? at) : null,
+          }
+        }),
+      )
+      return ran
+    }
     if ((e.tool as string) !== 'mcp__task-progress__set_tasks') return next(e)
     const input = e as unknown as {
       tasks?: { title: string; status: ProgressTask['status']; total?: number; done?: number }[]
@@ -243,6 +263,10 @@ export const register: Register = (on, options) => {
     const elapsed = startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000))
     // 不確定總量的進度，不給百分比：只畫一段來回移動的亮塊，旁邊是真實經過的秒數
     const sweep = () => {
+      if (Svg) {
+        const d = svgSweep(tick, th.active, th.pending)
+        return <Svg source={d.source} alt="處理中" width={d.w} height={d.h} />
+      }
       const w = BAR_W
       const seg = 4
       const span = w - seg
@@ -557,5 +581,25 @@ function toolSpec(isDeferred: boolean): ToolSpec {
         },
         required: ['tasks'],
       },
+  }
+}
+
+// 處理中的不確定進度：灰色虛線軌道上一塊來回移動的亮塊（桌面版）
+function svgSweep(tick: number, c: string, track: string): { source: string; w: number; h: number } {
+  const W = 180
+  const H = 20
+  const seg = 48
+  const span = W - 4 - seg
+  const step = 8
+  const k = (tick * step) % (span * 2)
+  const x = 2 + (k <= span ? k : span * 2 - k)
+  return {
+    w: W,
+    h: H,
+    source:
+      `<svg xmlns="http://www.w3.org/2000/svg" width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">` +
+      `<rect x="1" y="6" width="${W - 2}" height="8" rx="4" fill="none" stroke="${track}" stroke-width="1.5" stroke-dasharray="3 3"/>` +
+      `<rect x="${x}" y="4" width="${seg}" height="12" rx="6" fill="${c}"/>` +
+      `</svg>`,
   }
 }
