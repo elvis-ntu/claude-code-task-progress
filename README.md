@@ -184,6 +184,20 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 | `filled`（預設） | 灰底。終端機裡是灰底加 `╱` 斜線 |
 | `dashed` | 灰色虛線 |
 
+## 省 token 模式
+
+`set_tasks` 的完整說明和參數格式（粗估 400 到 500 token，沒有用計數器驗證）預設會附在每一次對話請求裡。想省的時候，輸入：
+
+```
+/task-progress saver
+```
+
+每輸入一次就切換開／關（也可以明確寫 `saver on`、`saver off`）。開啟後，這個工具只有名字在請求裡，Claude 需要時才用 ToolSearch 載入完整定義；下一個提問起生效，設定會記住，換 session 也保留。
+
+什麼時候適合開：這個 session 大多不需要進度條（問答、改一行程式）。什麼時候別開：長任務、會一直回報進度，因為載入後定義還是會留在每次請求裡，還多了一次載入，省不到，Claude 也比較容易忘記用它。
+
+這個指令是斜線指令，在終端機和桌面版的 Code 分頁都可以用。網頁版（claude.ai/code）我沒有測過，不確定 plugin 的指令是否可用。
+
 ## 疑難排解
 
 - **完全沒有面板**：先輸入 `/task-progress demo`。有出現代表 mod 正常，只是目前沒有任務資料；沒出現請執行 `/reload-plugins`，再確認 `claude plugin list` 裡有 `task-progress`。

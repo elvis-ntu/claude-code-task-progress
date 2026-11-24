@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { ElementConstructor, Register, SvgProps } from 'claude-code'
+import type { ElementConstructor, Register, SvgProps, ToolSpec } from 'claude-code'
 
 import type { ProgressTask } from '../types'
 
@@ -52,46 +52,32 @@ export const register: Register = (on, options) => {
         if (t !== null) void update($, tickAtom, n => n + 1)
       })
     })
-    await $.tool.register({
-      name: 'set_tasks',
-      description:
-        '更新輸入框上方的任務進度面板。每次任務狀態改變時呼叫，傳入完整任務清單（title 與 status: pending | in_progress | completed）。'
-        + '進行中的任務必須同時傳 total（這項工作總共有幾件）與 done（已完成幾件），進度百分比由 done/total 算出。'
-        + '開始前先把總量數出來（檔案數、步驟數、項目數）；數不出來就把工作拆成可數的子步驟再回報。缺少 total 的進行中任務會被拒絕。'
-        + '預設是合併更新：用 title 對應已存在的任務並更新狀態，沒提到的任務保持原樣、順序不變，新任務接在後面。開始一件全新的工作時才傳 reset: true，清掉舊的所有任務。',
-      isDeferred: false,
-      inputSchema: {
-        type: 'object',
-        properties: {
-          reset: { type: 'boolean' },
-          tasks: {
-            type: 'array',
-            items: {
-              type: 'object',
-              properties: {
-                title: { type: 'string' },
-                status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
-                total: { type: 'number', minimum: 1 },
-                done: { type: 'number', minimum: 0 },
-              },
-              required: ['title', 'status'],
-            },
-          },
-        },
-        required: ['tasks'],
-      },
-    })
+    // 省 token 模式（存在 $.store，換 session 也保留）：開啟時工具定義不再附在每次請求裡
+    const saver = (await $.store.get('tokenSaver')) === true
+    await $.tool.register(toolSpec(saver))
     await $.command.register({
       name: 'task-progress',
-      description: '任務進度面板：demo 顯示範例，clear 清空',
+      description: '任務進度面板：demo 顯示範例，clear 清空，saver 切換省 token 模式',
     })
     return next(e)
   })
 
   on('command.run', { command: 'task-progress' }, async ($, e) => {
-    if (String(e.args ?? '').trim() === 'clear') {
+    const arg = String(e.args ?? '').trim()
+    if (arg === 'clear') {
       await update($, tasksAtom, () => [])
       return { text: '已清空任務進度。' }
+    }
+    if (arg === 'saver' || arg === 'saver on' || arg === 'saver off') {
+      const wasOn = (await $.store.get('tokenSaver')) === true
+      const isOn = arg === 'saver on' ? true : arg === 'saver off' ? false : !wasOn
+      await $.store.set('tokenSaver', isOn)
+      await $.tool.register(toolSpec(isOn))
+      return {
+        text: isOn
+          ? '省 token 模式：開。set_tasks 的定義不再附在每次請求裡，Claude 需要時才會載入，下一個提問起生效。再輸入一次 /task-progress saver 可關閉。'
+          : '省 token 模式：關。set_tasks 的定義會附在每次請求裡，下一個提問起生效。再輸入一次 /task-progress saver 可開啟。',
+      }
     }
     const now = await $.clock.now()
     const min = 60000
@@ -526,4 +512,37 @@ function svgBar(kind: string, pct: number, c: string, st: Status, dashed: boolea
       `<filter id="glow" x="-20%" y="-60%" width="140%" height="220%"><feGaussianBlur stdDeviation="1.6" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter></defs>` +
       `<rect x="0.5" y="0.5" width="${W - 1}" height="${h - 1}" rx="8.5" ${dashed ? 'fill="none" stroke="#9aa1ab" stroke-dasharray="4 3"' : `fill="#3a4049" stroke="${mix(c, '#000000', 0.4)}"`}/>${fill}`,
   )
+}
+
+// set_tasks 的工具定義；isDeferred=true 時只有名字在每次請求裡，要用時才由 ToolSearch 載入
+function toolSpec(isDeferred: boolean): ToolSpec {
+  return {
+      name: 'set_tasks',
+      description:
+        '更新輸入框上方的任務進度面板。每次任務狀態改變時呼叫，傳入完整任務清單（title 與 status: pending | in_progress | completed）。'
+        + '進行中的任務必須同時傳 total（這項工作總共有幾件）與 done（已完成幾件），進度百分比由 done/total 算出。'
+        + '開始前先把總量數出來（檔案數、步驟數、項目數）；數不出來就把工作拆成可數的子步驟再回報。缺少 total 的進行中任務會被拒絕。'
+        + '預設是合併更新：用 title 對應已存在的任務並更新狀態，沒提到的任務保持原樣、順序不變，新任務接在後面。開始一件全新的工作時才傳 reset: true，清掉舊的所有任務。',
+      isDeferred,
+      inputSchema: {
+        type: 'object',
+        properties: {
+          reset: { type: 'boolean' },
+          tasks: {
+            type: 'array',
+            items: {
+              type: 'object',
+              properties: {
+                title: { type: 'string' },
+                status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+                total: { type: 'number', minimum: 1 },
+                done: { type: 'number', minimum: 0 },
+              },
+              required: ['title', 'status'],
+            },
+          },
+        },
+        required: ['tasks'],
+      },
+  }
 }
