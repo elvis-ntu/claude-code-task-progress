@@ -290,7 +290,7 @@ export const register: Register = (on, options) => {
       return (
         <Box paddingX={1} gap={1}>
           <Text bold>{header}</Text>
-          {bar(total, total >= 100 ? th.done : th.active)}
+          {bar(total, total >= 100 ? th.done : th.active, total >= 100 ? 'completed' : 'in_progress')}
           {cur ? (
             <Text color={color(cur.status)}>{`${ic[cur.status]} ${clip(cur.title, 24)}`.trim()}</Text>
           ) : (
@@ -305,7 +305,7 @@ export const register: Register = (on, options) => {
       return (
         <Box paddingX={1} gap={1}>
           <Text bold>{header}</Text>
-          {bar(total, total >= 100 ? th.done : th.active)}
+          {bar(total, total >= 100 ? th.done : th.active, total >= 100 ? 'completed' : 'in_progress')}
           <Text dimColor>{eta}</Text>
         </Box>
       )
@@ -341,7 +341,7 @@ export const register: Register = (on, options) => {
           <Box width={iconW + (iconW > 0 ? 1 : 0) + nameW}>
             <Text bold wrap="truncate-end">{`任務進度 ${doneN}/${tasks.length}`}</Text>
           </Box>
-          {bar(total, total >= 100 ? th.done : th.active)}
+          {bar(total, total >= 100 ? th.done : th.active, total >= 100 ? 'completed' : 'in_progress')}
           <Box width={5}>
             <Text bold>{`${Math.round(total)}%`}</Text>
           </Box>
