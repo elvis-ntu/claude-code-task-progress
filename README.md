@@ -71,7 +71,7 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 | `TodoWrite` | Claude 的待辦清單工具 |
 | `TaskCreate` / `TaskUpdate` | 新版的任務工具 |
 | `mcp__ccd_turn__update_plan` | 桌面版 app 內建的計畫工具（每次傳完整清單，只有標題和狀態） |
-| `set_tasks` | 這個 mod 自己提供的工具（`mcp__task-progress__set_tasks`），Claude 傳入完整任務清單；進行中的任務**必須**同時傳 `total`（總共幾件）和 `done`（已完成幾件），缺少會被拒絕；預設合併更新（用 `title` 對應），傳 `reset: true` 才清掉舊任務 |
+| `set_tasks` | 這個 mod 自己提供的工具（`mcp__task-progress__set_tasks`），Claude 傳入任務清單，只需要傳有變動的任務；進行中的任務**必須**同時傳 `total`（總共幾件）和 `done`（已完成幾件），缺少會被拒絕；預設合併更新（用 `title` 對應），傳 `reset: true` 才清掉舊任務 |
 
 只要請 Claude 做多步驟的工作，並說明「用待辦清單追蹤」，面板就會跟著更新。Claude 沒有建立任務時，面板不會出現，這是正常的。
 
