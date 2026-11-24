@@ -67,13 +67,18 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 |---|---|
 | `TodoWrite` | Claude 的待辦清單工具 |
 | `TaskCreate` / `TaskUpdate` | 新版的任務工具 |
-| `set_tasks` | 這個 mod 自己提供的工具（`mcp__task-progress__set_tasks`），Claude 傳入完整任務清單即可 |
+| `set_tasks` | 這個 mod 自己提供的工具（`mcp__task-progress__set_tasks`），Claude 傳入完整任務清單；進行中的任務可以再傳 `percent`（0-100）回報真實進度 |
 
 只要請 Claude 做多步驟的工作，並說明「用待辦清單追蹤」，面板就會跟著更新。Claude 沒有建立任務時，面板不會出現，這是正常的。
 
 ### 進度怎麼算
 
-待辦 0%、進行中 50%、完成 100%。待辦清單沒有更細的進度資訊，所以進行中固定算一半。整體百分比是所有任務的平均。
+每個任務的百分比：待辦 0%、完成 100%。進行中的任務有兩種情況：
+
+- **有回報 `percent`**（只有 `set_tasks` 能傳）：用它回報的真實數字，上限 99%，完成後才會變成 100%。
+- **沒有回報**：先暫時算 50%，代表「做到一半」，這只是預設值，不是量出來的進度。`TodoWrite` 和 `TaskCreate`/`TaskUpdate` 沒有這個欄位，所以用它們時進行中都是這個預設值。
+
+想要真實的進度條，就要請 Claude 在開始前先數出總共有幾件事（例如「共 10 個檔案」），並在做的過程中回報「已完成 N 件」。整體百分比是所有任務的平均。
 
 預估剩餘時間 = 已完成任務的平均耗時 × 剩餘任務數。至少要有一個完成的任務才會顯示。
 

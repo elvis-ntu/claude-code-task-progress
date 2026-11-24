@@ -12,7 +12,8 @@ export const register: Register = (on, options) => {
     await $.tool.register({
       name: 'set_tasks',
       description:
-        '更新輸入框上方的任務進度面板。每次任務狀態改變時呼叫，傳入完整任務清單（title 與 status: pending | in_progress | completed）。',
+        '更新輸入框上方的任務進度面板。每次任務狀態改變時呼叫，傳入完整任務清單（title 與 status: pending | in_progress | completed）。'
+        + '進行中的任務可加 percent（0-100）回報真實進度，但只有在能實際衡量時才填，例如「已處理 3/10 個檔案」＝30；不確定就不要填，面板會顯示進行中而不是假的百分比。',
       isDeferred: false,
       inputSchema: {
         type: 'object',
@@ -24,6 +25,7 @@ export const register: Register = (on, options) => {
               properties: {
                 title: { type: 'string' },
                 status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
+                percent: { type: 'number', minimum: 0, maximum: 100 },
               },
               required: ['title', 'status'],
             },
@@ -75,17 +77,24 @@ export const register: Register = (on, options) => {
 
   on('tool.call', async ($, e, next) => {
     if ((e.tool as string) !== 'mcp__task-progress__set_tasks') return next(e)
-    const input = e as unknown as { tasks?: { title: string; status: ProgressTask['status'] }[] }
+    const input = e as unknown as {
+      tasks?: { title: string; status: ProgressTask['status']; percent?: number }[]
+    }
     const list = input.tasks ?? []
     const now = await $.clock.now()
     await update($, tasksAtom, prev =>
       list.map(t => {
         const old = prev.find(p => p.title === t.title)
+        const pct =
+          t.status === 'in_progress' && typeof t.percent === 'number'
+            ? Math.max(0, Math.min(99, Math.round(t.percent)))
+            : undefined
         return {
           title: t.title,
           status: t.status,
           startedAt: t.status === 'pending' ? null : (old?.startedAt ?? now),
           doneAt: t.status === 'completed' ? (old?.doneAt ?? now) : null,
+          ...(pct === undefined ? {} : { pct }),
         }
       }),
     )
@@ -138,7 +147,7 @@ export const register: Register = (on, options) => {
     const th = THEMES[style.theme] ?? THEMES.default!
     const ic = ICONS[style.icons] ?? ICONS.symbols!
     const nameW = Math.max(10, Math.min(30, e.props.bodyColumns - BAR_W - 28))
-    const total = tasks.reduce((s, t) => s + PCT[t.status], 0) / tasks.length
+    const total = tasks.reduce((s, t) => s + eff(t), 0) / tasks.length
     const doneN = tasks.filter(t => t.status === 'completed').length
     const color = (st: Status) => (st === 'completed' ? th.done : st === 'in_progress' ? th.active : th.pending)
 
@@ -221,7 +230,7 @@ export const register: Register = (on, options) => {
           <Text dimColor>{eta}</Text>
         </Box>
         {shown.map((t, i) => {
-          const pct = PCT[t.status]
+          const pct = eff(t)
           const c = color(t.status)
           return (
             <Box key={`${i}-${t.title}`} gap={1}>
@@ -254,6 +263,8 @@ type Status = ProgressTask['status']
 const BAR_W = 14
 const MAX_ROWS = 6
 const PCT = { completed: 100, in_progress: 50, pending: 0 } as const
+// 有回報真實百分比（pct）就用它；否則用狀態的預設值
+const eff = (t: ProgressTask): number => (t.status === 'completed' ? 100 : (t.pct ?? PCT[t.status]))
 
 const ICONS: Record<string, Record<Status, string>> = {
   symbols: { completed: '✓', in_progress: '●', pending: '⏸' },
