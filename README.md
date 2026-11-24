@@ -24,6 +24,7 @@
 - 欄位固定寬度，中文任務名稱長短不一也會對齊。
 - Claude 處理中時，面板最下方多一列「處理中」，顯示真實經過的秒數和一段來回移動的亮塊。處理時間沒有總量可算，所以不給假的百分比。
 - 你送出新的提問時，如果上一件工作的任務已經全部完成，面板會自動清掉它們；沒做完的會保留。
+- Claude Code 內建的轉圈提示（例如 `Unfurling… (56s · ↓ 5.6k tokens)`）後面會接上真實的任務進度，變成 `Unfurling… 任務 2/5，進行中 3/10 (56s · …)`。
 
 ## 安裝
 
@@ -75,6 +76,8 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 
 ### 進度怎麼算
 
+> 進度只在 Claude 回報時才會更新。一個耗時很久的單一步驟（例如一次寫入一大份檔案）在做完之前，數字會停在原地，做完才一次跳上去。這是真實的，不是卡住；面板最下方的「處理中」列會持續顯示經過的秒數，證明它還在跑。步驟拆得越細、回報越勤，進度條就越平順。
+
 待辦 0%、完成 100%。進行中的任務用 `set_tasks` 回報時，百分比是 `done ÷ total` 算出來的真實數字（上限 99%，完成後才變 100%），右側也會顯示 `3/10` 這樣的數量。
 
 `set_tasks` 對進行中的任務**強制**要有 `total` 和 `done`，所以 Claude 開始工作前一定要先數出總量（檔案數、步驟數、項目數），數不出來就要先把工作拆成可數的子步驟。
@@ -107,7 +110,8 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
         "layout": "detailed",
         "theme": "default",
         "trackStyle": "filled",
-        "showWorking": "on"
+        "showWorking": "on",
+        "spinnerProgress": "on"
       }
     }
   }
@@ -165,6 +169,13 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 |---|---|
 | `on`（預設） | Claude 處理時顯示「處理中」列與經過秒數 |
 | `off` | 只顯示任務，不顯示處理中列 |
+
+### 轉圈提示 `spinnerProgress`
+
+| 值 | 效果 |
+|---|---|
+| `on`（預設） | 在內建的轉圈提示後面加上任務進度；沒有任務時維持原樣 |
+| `off` | 不修改轉圈提示 |
 
 ### 未完成部分的樣式 `trackStyle`
 

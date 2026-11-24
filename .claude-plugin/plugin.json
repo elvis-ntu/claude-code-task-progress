@@ -78,6 +78,16 @@
         "on",
         "off"
       ]
+    },
+    "spinnerProgress": {
+      "type": "string",
+      "title": "轉圈提示加上任務進度",
+      "description": "on=在 Unfurling… 這類提示後面加上任務進度；off=維持原樣",
+      "default": "on",
+      "options": [
+        "on",
+        "off"
+      ]
     }
   }
 }

@@ -32,6 +32,17 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // 內建的轉圈提示（Unfurling… (56s · 5.6k tokens)）：在後面接上真實的任務進度
+  on('ui.render', { component: 'Spinner' }, async ($, e, next) => {
+    if (!style.spinner) return next(e)
+    const tasks = await read($, tasksAtom)
+    if (tasks.length === 0) return next(e)
+    const doneN = tasks.filter(t => t.status === 'completed').length
+    const cur = tasks.find(t => t.status === 'in_progress')
+    const detail = cur?.total !== undefined && cur.done !== undefined ? `，進行中 ${cur.done}/${cur.total}` : ''
+    return next({ ...e, props: { ...e.props, suffix: `… 任務 ${doneN}/${tasks.length}${detail}` } })
+  })
+
   // /task-progress demo：填入範例任務；/task-progress clear：清空
   on('session.start', async ($, e, next) => {
     $.clock.every(1000, () => {
@@ -375,7 +386,7 @@ const THEMES: Record<string, { done: string; active: string; pending: string; tr
   mono: { done: '#e2e8f0', active: '#ffffff', pending: '#718096', track: '#2d2d2d' },
 }
 
-type Style = { bar: string; icons: string; layout: string; theme: string; track: string; working: boolean }
+type Style = { bar: string; icons: string; layout: string; theme: string; track: string; working: boolean; spinner: boolean }
 
 function pick(v: unknown, allowed: readonly string[], fallback: string): string {
   return typeof v === 'string' && allowed.includes(v) ? v : fallback
@@ -389,6 +400,7 @@ function readStyle(o: Readonly<Record<string, unknown>> | undefined): Style {
     theme: pick(o?.theme, Object.keys(THEMES), 'default'),
     track: pick(o?.trackStyle, ['filled', 'dashed'], 'filled'),
     working: pick(o?.showWorking, ['on', 'off'], 'on') === 'on',
+    spinner: pick(o?.spinnerProgress, ['on', 'off'], 'on') === 'on',
   }
 }
 
