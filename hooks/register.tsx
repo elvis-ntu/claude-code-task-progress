@@ -6,7 +6,9 @@ import type { ProgressTask } from '../types'
 const tasksAtom = atom({ plugin: 'task-progress', key: 'tasks' } as const, [] as ProgressTask[])
 // 本輪（一次提問到回答結束）開始的時間；沒有在處理時為 null
 const turnAtom = atom({ plugin: 'task-progress', key: 'turnStartedAt' } as const, null as number | null)
-// 處理中每秒加一，讓面板重畫（計時與動畫）
+// 處理中時每個間隔加一，讓面板重畫（動畫）
+// 動畫更新間隔（毫秒）：太慢會像卡住
+const TICK_MS = 120
 const tickAtom = atom({ plugin: 'task-progress', key: 'tick' } as const, 0)
 
 export const register: Register = (on, options) => {
@@ -45,7 +47,7 @@ export const register: Register = (on, options) => {
 
   // /task-progress demo：填入範例任務；/task-progress clear：清空
   on('session.start', async ($, e, next) => {
-    $.clock.every(1000, () => {
+    $.clock.every(TICK_MS, () => {
       void read($, turnAtom).then(t => {
         if (t !== null) void update($, tickAtom, n => n + 1)
       })
