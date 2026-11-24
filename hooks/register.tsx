@@ -13,6 +13,14 @@ const tickAtom = atom({ plugin: 'task-progress', key: 'tick' } as const, 0)
 
 export const register: Register = (on, options) => {
   const style = readStyle(options)
+  // 請 Claude 用 set_tasks 回報進度（桌面版另有內建的 update_plan，不指示的話它會優先用內建的）
+  // 省 token 模式開啟時不加，避免每次請求多帶這段文字
+  on('prompt.compose', async ($, e, next) => {
+    const result = await next(e)
+    if ((await $.store.get('tokenSaver')) === true) return result
+    return { sections: [...result.sections, { id: 'task-progress:guide', scope: 'session', text: GUIDE }] }
+  })
+
   // 新的提問：上一件工作若已全部完成，就把舊任務清掉（沒做完的保留）
   on('prompt.submit', async ($, e, next) => {
     await update($, tasksAtom, prev =>
@@ -513,6 +521,11 @@ function svgBar(kind: string, pct: number, c: string, st: Status, dashed: boolea
       `<rect x="0.5" y="0.5" width="${W - 1}" height="${h - 1}" rx="8.5" ${dashed ? 'fill="none" stroke="#9aa1ab" stroke-dasharray="4 3"' : `fill="#3a4049" stroke="${mix(c, '#000000', 0.4)}"`}/>${fill}`,
   )
 }
+
+// 加進系統提示的指示（越短越省 token）
+const GUIDE =
+  '進度面板：做多步驟工作時，用 mcp__task-progress__set_tasks 回報進度，優先於其他任務或計畫工具（例如 update_plan）。'
+  + '開始前先數出總量；進行中的任務必須傳 total 與 done；每做完一項就更新一次；全新的工作傳 reset: true。'
 
 // set_tasks 的工具定義；isDeferred=true 時只有名字在每次請求裡，要用時才由 ToolSearch 載入
 function toolSpec(isDeferred: boolean): ToolSpec {
