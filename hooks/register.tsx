@@ -53,7 +53,7 @@ export const register: Register = (on, options) => {
     const demo: ProgressTask[] = [
       { title: '盤點資料夾', status: 'completed', startedAt: now - 6 * min, doneAt: now - 4 * min },
       { title: '整理檔案結構', status: 'completed', startedAt: now - 4 * min, doneAt: now - 1 * min },
-      { title: '補上 README', status: 'in_progress', startedAt: now - 1 * min, doneAt: null },
+      { title: '補上 README', status: 'in_progress', startedAt: now - 1 * min, doneAt: null, pct: 50, done: 1, total: 2 },
       { title: '驗證結果', status: 'pending', startedAt: null, doneAt: null },
     ]
     await update($, tasksAtom, () => demo)
@@ -252,7 +252,7 @@ export const register: Register = (on, options) => {
               </Box>
               {bar(pct, c, t.status)}
               <Box width={5}>
-                <Text bold>{`${pct}%`}</Text>
+                <Text bold>{t.status === 'in_progress' && t.pct === undefined ? '—' : `${pct}%`}</Text>
               </Box>
               <Text dimColor>{rowTime(t, now)}</Text>
             </Box>
@@ -270,9 +270,8 @@ type Status = ProgressTask['status']
 
 const BAR_W = 14
 const MAX_ROWS = 6
-const PCT = { completed: 100, in_progress: 50, pending: 0 } as const
-// 有 done/total 算出的真實百分比（pct）就用它；TodoWrite 等沒有數量的來源才用預設值
-const eff = (t: ProgressTask): number => (t.status === 'completed' ? 100 : (t.pct ?? PCT[t.status]))
+// 只用真實數字：完成 100、待辦 0、進行中用 done/total 算出的 pct；沒有數量的進行中任務算 0，不假裝進度
+const eff = (t: ProgressTask): number => (t.status === 'completed' ? 100 : (t.pct ?? 0))
 
 const ICONS: Record<string, Record<Status, string>> = {
   symbols: { completed: '✓', in_progress: '●', pending: '⏸' },

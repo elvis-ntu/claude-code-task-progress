@@ -77,7 +77,7 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 
 `set_tasks` 對進行中的任務**強制**要有 `total` 和 `done`，所以 Claude 開始工作前一定要先數出總量（檔案數、步驟數、項目數），數不出來就要先把工作拆成可數的子步驟。
 
-`TodoWrite` 和 `TaskCreate`/`TaskUpdate` 本身沒有數量欄位，用它們時進行中的任務沒有真實進度，只能暫時顯示 50%（代表「做到一半」，不是量出來的）。想要真實進度條，請 Claude 用 `set_tasks`。
+`TodoWrite` 和 `TaskCreate`/`TaskUpdate` 本身沒有數量欄位，用它們時進行中的任務沒有真實進度：百分比欄顯示 `—`，進度條保持空的，也不計入整體百分比，不會假裝做到一半。想要真實進度條，請 Claude 用 `set_tasks`。
 
 整體百分比是所有任務的平均。
 
