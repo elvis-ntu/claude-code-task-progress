@@ -67,7 +67,7 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 |---|---|
 | `TodoWrite` | Claude 的待辦清單工具 |
 | `TaskCreate` / `TaskUpdate` | 新版的任務工具 |
-| `set_tasks` | 這個 mod 自己提供的工具（`mcp__task-progress__set_tasks`），Claude 傳入完整任務清單；進行中的任務**必須**同時傳 `total`（總共幾件）和 `done`（已完成幾件），缺少會被拒絕 |
+| `set_tasks` | 這個 mod 自己提供的工具（`mcp__task-progress__set_tasks`），Claude 傳入完整任務清單；進行中的任務**必須**同時傳 `total`（總共幾件）和 `done`（已完成幾件），缺少會被拒絕；預設合併更新（用 `title` 對應），傳 `reset: true` 才清掉舊任務 |
 
 只要請 Claude 做多步驟的工作，並說明「用待辦清單追蹤」，面板就會跟著更新。Claude 沒有建立任務時，面板不會出現，這是正常的。
 
@@ -80,6 +80,13 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 `TodoWrite` 和 `TaskCreate`/`TaskUpdate` 本身沒有數量欄位，用它們時進行中的任務沒有真實進度：百分比欄顯示 `—`，進度條保持空的，也不計入整體百分比，不會假裝做到一半。想要真實進度條，請 Claude 用 `set_tasks`。
 
 整體百分比是所有任務的平均。
+
+### 任務的順序與保留
+
+- 列的順序固定，依任務加入的先後排列，**不會**因為狀態改變而跳動。
+- `set_tasks` 預設是**合併更新**：用 `title` 對應已存在的任務，沒提到的任務保持原樣。所以做完的任務會留在面板上，不會被下一批蓋掉。
+- 開始一件全新的工作時，Claude 應傳 `reset: true`，清掉舊的所有任務。也可以用 `/task-progress clear` 手動清空。
+- 任務超過 6 個時，只顯示最近的 6 個，較早的折疊成「前面還有 N 個較早的任務」。
 
 預估剩餘時間 = 已完成任務的平均耗時 × 剩餘任務數。至少要有一個完成的任務才會顯示。
 

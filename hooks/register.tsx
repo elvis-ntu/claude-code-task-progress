@@ -14,11 +14,13 @@ export const register: Register = (on, options) => {
       description:
         '更新輸入框上方的任務進度面板。每次任務狀態改變時呼叫，傳入完整任務清單（title 與 status: pending | in_progress | completed）。'
         + '進行中的任務必須同時傳 total（這項工作總共有幾件）與 done（已完成幾件），進度百分比由 done/total 算出。'
-        + '開始前先把總量數出來（檔案數、步驟數、項目數）；數不出來就把工作拆成可數的子步驟再回報。缺少 total 的進行中任務會被拒絕。',
+        + '開始前先把總量數出來（檔案數、步驟數、項目數）；數不出來就把工作拆成可數的子步驟再回報。缺少 total 的進行中任務會被拒絕。'
+        + '預設是合併更新：用 title 對應已存在的任務並更新狀態，沒提到的任務保持原樣、順序不變，新任務接在後面。開始一件全新的工作時才傳 reset: true，清掉舊的所有任務。',
       isDeferred: false,
       inputSchema: {
         type: 'object',
         properties: {
+          reset: { type: 'boolean' },
           tasks: {
             type: 'array',
             items: {
@@ -81,6 +83,7 @@ export const register: Register = (on, options) => {
     if ((e.tool as string) !== 'mcp__task-progress__set_tasks') return next(e)
     const input = e as unknown as {
       tasks?: { title: string; status: ProgressTask['status']; total?: number; done?: number }[]
+      reset?: boolean
     }
     const list = input.tasks ?? []
     const bad = list.find(
@@ -92,20 +95,25 @@ export const register: Register = (on, options) => {
       }
     }
     const now = await $.clock.now()
-    await update($, tasksAtom, prev =>
-      list.map(t => {
-        const old = prev.find(p => p.title === t.title)
+    await update($, tasksAtom, prev => {
+      const out: ProgressTask[] = input.reset ? [] : [...prev]
+      for (const t of list) {
+        const idx = out.findIndex(p => p.title === t.title)
+        const old = idx >= 0 ? out[idx] : undefined
         const counted = t.status === 'in_progress' && typeof t.total === 'number' && typeof t.done === 'number'
         const pct = counted ? Math.min(99, Math.round(((t.done ?? 0) / (t.total ?? 1)) * 100)) : undefined
-        return {
+        const item: ProgressTask = {
           title: t.title,
           status: t.status,
           startedAt: t.status === 'pending' ? null : (old?.startedAt ?? now),
           doneAt: t.status === 'completed' ? (old?.doneAt ?? now) : null,
           ...(pct === undefined ? {} : { pct, done: t.done, total: t.total }),
         }
-      }),
-    )
+        if (idx >= 0) out[idx] = item
+        else out.push(item)
+      }
+      return out
+    })
     const text = `已更新 ${list.length} 個任務`
     return { result: text, text }
   })
@@ -200,7 +208,7 @@ export const register: Register = (on, options) => {
       return (
         <Box paddingX={1} gap={1}>
           <Text bold>{header}</Text>
-          {bar(total, th.active)}
+          {bar(total, total >= 100 ? th.done : th.active)}
           {cur ? (
             <Text color={color(cur.status)}>{`${ic[cur.status]} ${clip(cur.title, 24)}`.trim()}</Text>
           ) : (
@@ -215,14 +223,15 @@ export const register: Register = (on, options) => {
       return (
         <Box paddingX={1} gap={1}>
           <Text bold>{header}</Text>
-          {bar(total, th.active)}
+          {bar(total, total >= 100 ? th.done : th.active)}
           <Text dimColor>{eta}</Text>
         </Box>
       )
     }
 
-    const order = { in_progress: 0, pending: 1, completed: 2 }
-    const shown = [...tasks].sort((a, b) => order[a.status] - order[b.status]).slice(0, MAX_ROWS)
+    // 固定順序（依加入順序），列的位置不會因狀態改變而跳動；太多時只顯示最近的
+    const shown = tasks.slice(-MAX_ROWS)
+    const hidden = tasks.length - shown.length
     const iconW = style.icons === 'none' ? 0 : 3
 
     return (
@@ -231,12 +240,13 @@ export const register: Register = (on, options) => {
           <Box width={iconW + (iconW > 0 ? 1 : 0) + nameW}>
             <Text bold wrap="truncate-end">{`任務進度 ${doneN}/${tasks.length}`}</Text>
           </Box>
-          {bar(total, th.active)}
+          {bar(total, total >= 100 ? th.done : th.active)}
           <Box width={5}>
             <Text bold>{`${Math.round(total)}%`}</Text>
           </Box>
           <Text dimColor>{eta}</Text>
         </Box>
+        {hidden > 0 ? <Text dimColor>{`… 前面還有 ${hidden} 個較早的任務`}</Text> : null}
         {shown.map((t, i) => {
           const pct = eff(t)
           const c = color(t.status)
@@ -258,9 +268,6 @@ export const register: Register = (on, options) => {
             </Box>
           )
         })}
-        {tasks.length > MAX_ROWS ? (
-          <Text dimColor>{`… 還有 ${tasks.length - MAX_ROWS} 個任務`}</Text>
-        ) : null}
       </Box>
     )
   })
