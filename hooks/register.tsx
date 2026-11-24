@@ -13,7 +13,8 @@ export const register: Register = (on, options) => {
       name: 'set_tasks',
       description:
         '更新輸入框上方的任務進度面板。每次任務狀態改變時呼叫，傳入完整任務清單（title 與 status: pending | in_progress | completed）。'
-        + '進行中的任務可加 percent（0-100）回報真實進度，但只有在能實際衡量時才填，例如「已處理 3/10 個檔案」＝30；不確定就不要填，面板會顯示進行中而不是假的百分比。',
+        + '進行中的任務必須同時傳 total（這項工作總共有幾件）與 done（已完成幾件），進度百分比由 done/total 算出。'
+        + '開始前先把總量數出來（檔案數、步驟數、項目數）；數不出來就把工作拆成可數的子步驟再回報。缺少 total 的進行中任務會被拒絕。',
       isDeferred: false,
       inputSchema: {
         type: 'object',
@@ -25,7 +26,8 @@ export const register: Register = (on, options) => {
               properties: {
                 title: { type: 'string' },
                 status: { type: 'string', enum: ['pending', 'in_progress', 'completed'] },
-                percent: { type: 'number', minimum: 0, maximum: 100 },
+                total: { type: 'number', minimum: 1 },
+                done: { type: 'number', minimum: 0 },
               },
               required: ['title', 'status'],
             },
@@ -78,23 +80,29 @@ export const register: Register = (on, options) => {
   on('tool.call', async ($, e, next) => {
     if ((e.tool as string) !== 'mcp__task-progress__set_tasks') return next(e)
     const input = e as unknown as {
-      tasks?: { title: string; status: ProgressTask['status']; percent?: number }[]
+      tasks?: { title: string; status: ProgressTask['status']; total?: number; done?: number }[]
     }
     const list = input.tasks ?? []
+    const bad = list.find(
+      t => t.status === 'in_progress' && !(typeof t.total === 'number' && t.total >= 1 && typeof t.done === 'number' && t.done >= 0 && t.done <= t.total),
+    )
+    if (bad) {
+      return {
+        deny: `「${bad.title}」是進行中，必須同時回報 total（總共幾件，至少 1）與 done（已完成幾件，0 到 total）。請先把工作量數出來再呼叫。`,
+      }
+    }
     const now = await $.clock.now()
     await update($, tasksAtom, prev =>
       list.map(t => {
         const old = prev.find(p => p.title === t.title)
-        const pct =
-          t.status === 'in_progress' && typeof t.percent === 'number'
-            ? Math.max(0, Math.min(99, Math.round(t.percent)))
-            : undefined
+        const counted = t.status === 'in_progress' && typeof t.total === 'number' && typeof t.done === 'number'
+        const pct = counted ? Math.min(99, Math.round(((t.done ?? 0) / (t.total ?? 1)) * 100)) : undefined
         return {
           title: t.title,
           status: t.status,
           startedAt: t.status === 'pending' ? null : (old?.startedAt ?? now),
           doneAt: t.status === 'completed' ? (old?.doneAt ?? now) : null,
-          ...(pct === undefined ? {} : { pct }),
+          ...(pct === undefined ? {} : { pct, done: t.done, total: t.total }),
         }
       }),
     )
@@ -263,7 +271,7 @@ type Status = ProgressTask['status']
 const BAR_W = 14
 const MAX_ROWS = 6
 const PCT = { completed: 100, in_progress: 50, pending: 0 } as const
-// 有回報真實百分比（pct）就用它；否則用狀態的預設值
+// 有 done/total 算出的真實百分比（pct）就用它；TodoWrite 等沒有數量的來源才用預設值
 const eff = (t: ProgressTask): number => (t.status === 'completed' ? 100 : (t.pct ?? PCT[t.status]))
 
 const ICONS: Record<string, Record<Status, string>> = {
@@ -307,7 +315,10 @@ function readStyle(o: Readonly<Record<string, unknown>> | undefined): Style {
 }
 
 function rowTime(t: ProgressTask, now: number): string {
-  if (t.status === 'in_progress' && t.startedAt) return `已 ${fmt(now - t.startedAt)}`
+  if (t.status === 'in_progress' && t.startedAt) {
+    const n = t.total !== undefined && t.done !== undefined ? `${t.done}/${t.total} · ` : ''
+    return `${n}已 ${fmt(now - t.startedAt)}`
+  }
   if (t.status === 'completed' && t.startedAt && t.doneAt) return `用 ${fmt(t.doneAt - t.startedAt)}`
   return ''
 }
