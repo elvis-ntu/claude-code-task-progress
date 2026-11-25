@@ -8,11 +8,11 @@ A Claude Code mod that shows a live **task progress panel** above the prompt: on
 
 Desktop app (SVG graphical bars, `candy` style):
 
-![desktop](docs/desktop.png)
+![desktop](docs/desktop.en.png)
 
 Terminal (character bars, `solid` style):
 
-![terminal](docs/terminal.png)
+![terminal](docs/terminal.en.png)
 
 ## Features
 
@@ -191,8 +191,9 @@ The desktop app has its own built-in task tool (`update_plan`). If Claude isn't 
 
 - The `set_tasks` tool description already says "prefer this one even if built-in task or plan tools exist", which Claude sees when choosing a tool.
 - This mod **cannot** change the system prompt: in current Claude Code versions, the `prompt.compose` hook of a user-installed plugin is skipped by a built-in security plugin. That is a deliberate safeguard, so we don't work around it.
-- The plugin ships a skill, `track-progress`, whose description tells Claude to count the total first and report with `set_tasks`. Claude loads it by itself when it starts multi-step work, so no setup is needed. Because Claude decides when to load a skill, it is not 100% guaranteed.
-- For the most reliable result, also add one line to your own `CLAUDE.md`, which both the terminal and the desktop app read (optional):
+- Instead, on every prompt you send, the mod attaches one short fixed reminder next to it (via the `prompt.submit` hook's `context`). It is for the model only, you don't see it, and it does not read or change your own text. It is skipped for slash commands and in saver mode. In my tests (headless runs with this plugin loaded), Claude reported a 4-step job through `set_tasks` without being told to, in both runs. That is two runs, not a guarantee.
+- The plugin also ships a skill, `track-progress`. Claude decides by itself whether to load a skill, and in a real session it did **not** load it, so don't rely on it alone.
+- If the reminder above is not enough for you, add one line to your own `CLAUDE.md`, which both the terminal and the desktop app read (optional):
 
 ```
 For multi-step work, count the total first and report progress with set_tasks, not update_plan.
@@ -202,23 +203,36 @@ For multi-step work, count the total first and report progress with set_tasks, n
 
 This plugin has very little effect on Claude's token usage. Below, "measured" and "estimated" figures are kept separate.
 
-| Item | Figure | Source |
-|---|---|---|
-| The `set_tasks` tool definition (sent with every request) | about **273 tokens** | **Measured**: the MCP tools row in `/context` |
-| The `track-progress` skill's entry in the skill list (sent with every request) | about 70 to 100 tokens | **Estimated**: `/context` does not list it separately; inferred from the average of the other skills. Its full text (about 200 tokens) enters the conversation only when Claude loads it |
-| Each time Claude calls `set_tasks` to report progress | about 150 to 300 tokens | **Estimated**: not verified with a token counter |
-| Progress bars, animation, timers, spinner progress, styles and themes | 0 tokens | All run locally on screen and are never sent to the model |
-| Reading task lists from `update_plan`, `TodoWrite`, `TaskCreate`/`TaskUpdate` | 0 tokens | Those tools are already in the tool list; the mod just uses the titles and statuses they already created to draw the panel |
+**What costs tokens** (all numbers are per occurrence):
+
+| Item | When it is sent | Tokens | Source |
+|---|---|---|---|
+| The `set_tasks` tool definition | every request | about **273** | **Measured**: the MCP tools row in `/context` |
+| The `track-progress` skill's entry in the skill list | every request | about 70 to 100 | **Estimated**: `/context` does not list it separately; inferred from the average of the other skills. Its full text (about 200) is sent only if Claude loads it |
+| The fixed reminder attached to your prompt | once per prompt you send | about 30 to 50 | **Estimated**: one short Chinese sentence, not verified with a token counter. Not sent in saver mode or for slash commands |
+| Claude calling `set_tasks` to report progress | once per report | about 150 to 300 | **Estimated**: not verified with a token counter |
+
+**What costs nothing (0 tokens):** progress bars, animation, timers, spinner progress, styles and themes all run locally on screen and are never sent to the model. Reading task lists from `update_plan`, `TodoWrite` or `TaskCreate`/`TaskUpdate` is free too: those tools are already in the tool list, and the mod only uses the titles and statuses they already created.
 
 ### How to calculate it
 
-Total usage is roughly:
-
 ```
-requests × 273 (tool definition) + reports × 150–300 (per report)
+requests × (273 + 70~100)   tool definition + skill entry
++ prompts  × 30~50        fixed reminder
++ reports  × 150~300        set_tasks calls
 ```
 
-Example: a job with 10 requests and 6 reports costs about `10 × 273 + 6 × 250` ≈ **4,000 tokens**. With prompt caching on, the tool-definition part is mostly billed at the cached rate, so the real cost is lower than list price. Since each request already carries tens to hundreds of thousands of tokens of conversation, 273 tokens is roughly 0.1%.
+**Worked example:** you send 1 prompt, and Claude finishes the job in 10 requests, reporting progress 6 times.
+
+| Part | Calculation | Tokens |
+|---|---|---|
+| Tool definition | 10 × 273 | 2,730 |
+| Skill entry | 10 × 70 to 100 | 700 to 1,000 |
+| Fixed reminder | 1 × 30 to 50 | 30 to 50 |
+| Progress reports | 6 × 150 to 300 | 900 to 1,800 |
+| **Total** | | **about 4,400 to 5,600 (roughly 5,000)** |
+
+Only the 2,730 for the tool definition is measured; the rest are estimates. Two caveats: with prompt caching on, the repeated parts (tool definition, skill entry) are mostly billed at the cheaper cached rate; and text added to the conversation (the reminder, each report) is read again by every later request as part of the history, usually at the cached rate, which this example does not multiply out. Since each request already carries tens to hundreds of thousands of tokens of conversation, the fixed 273 + skill entry is roughly 0.1% of it.
 
 These are token counts only; I have not converted them to money, because price depends on your model and plan. For actual spend, run `/cost` in Claude Code (pay-as-you-go) or `/usage` (subscription usage limits).
 
@@ -262,7 +276,7 @@ This plugin uses only the **task list** to draw the progress panel. Below is wha
 
 **Two technical details, stated honestly:**
 1. To recognize the desktop app's `update_plan`, this plugin registers a handler that runs on every tool call. It only looks at the tool's name; anything other than the task tools above is passed through unchanged, and the content of other tools is not read.
-2. The code contains a `prompt.compose` handler that was meant to add a short "please use `set_tasks`" instruction to the system prompt. Current Claude Code versions skip it, so it does not run. If you're uneasy, you can simply delete it without affecting anything else.
+2. The code contains a `prompt.compose` handler that was meant to add a short "please use `set_tasks`" instruction to the system prompt. Current Claude Code versions skip it, so it does not run. Its replacement is the `prompt.submit` handler, which attaches the same fixed sentence next to each prompt as hidden context for the model. It adds only that constant text; it never reads or changes what you typed. If you're uneasy, you can delete either handler without affecting anything else.
 
 ## Troubleshooting
 
@@ -284,7 +298,7 @@ hooks/hooks.json                  # points to the hooks module
 hooks/register.tsx                # the mod itself
 skills/track-progress/SKILL.md    # tells Claude to report with set_tasks
 types/index.d.ts                  # state type declarations
-docs/                             # screenshots for the README
+docs/                             # screenshots for the README (*.en.png: English)
 ```
 
 ## License

@@ -24,7 +24,10 @@ export const register: Register = (on, options) => {
   // 新的提問就是新的一件工作：清掉上一件留下的所有任務，不論有沒有做完（還需要的，Claude 會重新回報）
   on('prompt.submit', async ($, e, next) => {
     await update($, tasksAtom, () => [])
-    return next(e)
+    // 在提問旁邊附一句固定提醒（只給模型看；不讀也不改使用者輸入的文字）。
+    // 斜線指令、系統產生的提問、省 token 模式都不附
+    if (e.command || e.isMeta || (await $.store.get('tokenSaver')) === true) return next(e)
+    return next({ ...e, context: [...(e.context ?? []), GUIDE] })
   })
 
   // 一輪處理的開始與結束（只看主對話，不看子代理）
@@ -546,10 +549,9 @@ function svgBar(kind: string, pct: number, c: string, st: Status, dashed: boolea
   )
 }
 
-// 加進系統提示的指示（越短越省 token）
+// 附在每個提問旁邊的提醒（越短越省 token；total/done 是 set_tasks 的必填欄位，工具定義會要求，這裡不重複）
 const GUIDE =
-  '進度面板：做多步驟工作時，用 mcp__task-progress__set_tasks 回報進度，優先於其他任務或計畫工具（例如 update_plan）。'
-  + '開始前先數出總量；進行中的任務必須傳 total 與 done；每做完一項就更新一次；全新的工作傳 reset: true。'
+  '工作需要兩個以上步驟時，先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）。'
 
 // set_tasks 的工具定義；isDeferred=true 時只有名字在每次請求裡，要用時才由 ToolSearch 載入
 function toolSpec(isDeferred: boolean): ToolSpec {
