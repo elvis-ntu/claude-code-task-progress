@@ -46,6 +46,17 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 
 安裝後執行 `/reload-plugins`，或開一個新的 session。
 
+### 更新
+
+```bash
+claude plugin marketplace update elvis-ntu/claude-code-task-progress
+claude plugin update task-progress
+```
+
+然後執行 `/reload-plugins`，或開一個新的 session。
+
+> 給維護者：Claude Code 靠 `.claude-plugin/plugin.json` 的 `version` 判斷要不要重新抓取。改了程式卻沒升版號，cache 會一直用舊版，改動永遠不會載入。每次發佈都要遞增版號。
+
 ## 使用
 
 ### 1. 先確認它有在運作

@@ -46,6 +46,17 @@ Choose the user scope when installing, so every project, the terminal and the de
 
 After installing, run `/reload-plugins` or start a new session.
 
+### Update
+
+```bash
+claude plugin marketplace update elvis-ntu/claude-code-task-progress
+claude plugin update task-progress
+```
+
+Then run `/reload-plugins` or start a new session.
+
+> For maintainers: Claude Code uses the `version` field in `.claude-plugin/plugin.json` to decide whether to fetch again. If you change the code without bumping the version, the cache keeps serving the old copy and your changes never load. Bump the version on every release.
+
 ## Usage
 
 ### 1. Check that it works
