@@ -18,7 +18,7 @@ Terminal (character bars, `solid` style):
 
 - One progress bar per task, with its status: pending ⏸, in progress ⚡, done 💎 (`candy` style on the desktop app).
 - The header shows overall progress (`2/4`, `63%`) and the estimated time remaining.
-- Shows how long each task took: "5m so far" while running, "took 2m" once finished.
+- Shows how long each task took, to the second: "3m5s so far" while running, "took 42s" once finished. When `set_tasks` marks tasks completed, its result line in the conversation also lists each one with its time (for example "Updated 2 tasks; done: Fix the code (took 1m12s)").
 - 10 bar styles, 5 icon sets, 3 layouts and 5 color themes, all selectable.
 - Drawn as graphics (SVG) on the desktop app; the terminal automatically falls back to character styles with no extra setup.
 - Fixed-width columns, so task names of different lengths (including CJK text) stay aligned.

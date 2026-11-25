@@ -32,6 +32,8 @@ type Strings = {
   /** 內建轉圈提示後面接的任務進度 */
   spinner: (done: number, total: number, cur?: { done: number; total: number }) => string
   updated: (n: number) => string
+  /** 接在 updated 後面：這次剛完成的任務與耗時 */
+  finished: (items: { title: string; took: string }[]) => string
   denyInProgress: (title: string) => string
   commandDesc: string
   cleared: string
@@ -56,6 +58,7 @@ const STR: Record<Lang, Strings> = {
     eta: t => `~${t} left`,
     spinner: (d, n, cur) => `… tasks ${d}/${n}${cur ? `, current ${cur.done}/${cur.total}` : ''}`,
     updated: n => `Updated ${n} task${n === 1 ? '' : 's'}`,
+    finished: items => `; done: ${items.map(i => `${i.title} (took ${i.took})`).join(', ')}`,
     denyInProgress: title =>
       `"${title}" is in_progress, so it must also report total (how many items in all, at least 1) and done (how many are finished, 0 to total). Count the work first, then call again.`,
     commandDesc: 'Task progress panel: list prints every task, demo shows a sample, clear empties it, saver toggles token-saver mode',
@@ -81,6 +84,7 @@ const STR: Record<Lang, Strings> = {
     eta: t => `預估剩餘 ~${t}`,
     spinner: (d, n, cur) => `… 任務 ${d}/${n}${cur ? `，進行中 ${cur.done}/${cur.total}` : ''}`,
     updated: n => `已更新 ${n} 個任務`,
+    finished: items => `；完成：${items.map(i => `${i.title}（用 ${i.took}）`).join('、')}`,
     denyInProgress: title =>
       `「${title}」是進行中，必須同時回報 total（總共幾件，至少 1）與 done（已完成幾件，0 到 total）。請先把工作量數出來再呼叫。`,
     commandDesc: '任務進度面板：list 列出全部任務，demo 顯示範例，clear 清空，saver 切換省 token 模式',
@@ -292,11 +296,17 @@ export const register: Register = (on, options) => {
       return { deny: (await getS($, options?.language)).denyInProgress(bad.title) }
     }
     const now = await $.clock.now()
+    // 這次呼叫裡剛變成完成的任務與耗時，附在工具結果後面
+    const finished: { title: string; ms: number }[] = []
     await update($, tasksAtom, prev => {
+      finished.length = 0
       const out: ProgressTask[] = input.reset ? [] : [...prev]
       for (const t of list) {
         const idx = out.findIndex(p => p.title === t.title)
         const old = idx >= 0 ? out[idx] : undefined
+        if (t.status === 'completed' && old && old.status !== 'completed' && old.startedAt) {
+          finished.push({ title: t.title, ms: now - old.startedAt })
+        }
         const counted = t.status === 'in_progress' && typeof t.total === 'number' && typeof t.done === 'number'
         const pct = counted ? Math.min(99, Math.round(((t.done ?? 0) / (t.total ?? 1)) * 100)) : undefined
         const item: ProgressTask = {
@@ -311,7 +321,8 @@ export const register: Register = (on, options) => {
       }
       return out
     })
-    const text = (await getS($, options?.language)).updated(list.length)
+    const s = await getS($, options?.language)
+    const text = s.updated(list.length) + (finished.length ? s.finished(finished.map(f => ({ title: f.title, took: fmt(f.ms) }))) : '')
     return { result: text, text }
   })
 
@@ -612,10 +623,12 @@ function overallEta(tasks: ProgressTask[], s: Strings): string {
   return s.eta(fmt(avg * remaining))
 }
 
+// 秒級精度：42s、3m5s、1h20m
 function fmt(ms: number): string {
-  const m = Math.round(ms / 60000)
-  if (m < 1) return '<1m'
-  if (m < 60) return `${m}m`
+  const sec = Math.max(0, Math.round(ms / 1000))
+  if (sec < 60) return `${sec}s`
+  const m = Math.floor(sec / 60)
+  if (m < 60) return `${m}m${sec % 60 ? `${sec % 60}s` : ''}`
   return `${Math.floor(m / 60)}h${m % 60 ? `${m % 60}m` : ''}`
 }
 
