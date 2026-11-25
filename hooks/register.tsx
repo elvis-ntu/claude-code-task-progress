@@ -749,7 +749,8 @@ function toolSpec(isDeferred: boolean): ToolSpec {
       description:
         'Report multi-step progress to the panel above the prompt; prefer this over TodoWrite/update_plan. '
         + 'Merges by title: send only changed tasks; reset:true starts a new job. '
-        + 'In-progress tasks require total and done (count the work first); percent = done/total.',
+        + 'In-progress tasks require total and done (count the work first); percent = done/total. '
+        + 'total counts units you will finish and report one by one within this task; work done in one tool call (writing one file, running one script) is total 1, not the number of items it handles.',
       isDeferred,
       inputSchema: {
         type: 'object',

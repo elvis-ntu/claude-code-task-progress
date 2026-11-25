@@ -98,7 +98,7 @@ Just ask Claude to do multi-step work and tell it to "track it with a to-do list
 
 Pending is 0%, done is 100%. For an in-progress task reported through `set_tasks`, the percentage is the real `done ÷ total` (capped at 99%; only completion makes it 100%), and the right side also shows the count such as `3/10`.
 
-`set_tasks` **requires** `total` and `done` for in-progress tasks, so Claude must count the total (files, steps, items) before starting. If it can't be counted, the work has to be split into countable sub-steps first.
+`set_tasks` **requires** `total` and `done` for in-progress tasks, so Claude must count the total (files, steps, items) before starting. If it can't be counted, the work has to be split into countable sub-steps first. `total` must count units Claude finishes and reports one by one: a step done in one tool call (writing a script that will later process 22 files) is `1`, not `22`, or it will sit at `0/22` and then jump to 100%.
 
 `TodoWrite`, `TaskCreate`/`TaskUpdate` and the desktop app's `update_plan` have no count fields. With them, an in-progress task has no real progress: the percentage column shows `—`, the bar stays empty, and it is excluded from the overall percentage, rather than pretending to be halfway. For a real progress bar, ask Claude to use `set_tasks`.
 
