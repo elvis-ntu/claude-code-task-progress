@@ -551,7 +551,7 @@ function svgBar(kind: string, pct: number, c: string, st: Status, dashed: boolea
 
 // 附在每個提問旁邊的提醒（越短越省 token；total/done 是 set_tasks 的必填欄位，工具定義會要求，這裡不重複）
 const GUIDE =
-  '工作需要兩個以上步驟時，先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）。'
+  '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。'
 
 // set_tasks 的工具定義；isDeferred=true 時只有名字在每次請求裡，要用時才由 ToolSearch 載入
 function toolSpec(isDeferred: boolean): ToolSpec {

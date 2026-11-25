@@ -1,6 +1,6 @@
 {
   "name": "task-progress",
-  "version": "0.1.1",
+  "version": "0.1.2",
   "description": "在輸入框上方顯示每個任務的進度條、百分比與預估剩餘時間。",
   "types": "./types/index.d.ts",
   "userConfig": {
