@@ -105,6 +105,7 @@ The overall percentage is the average across all tasks.
 - When starting a brand-new job, Claude should pass `reset: true` to clear all the old tasks. You can also clear manually with `/task-progress clear`.
 - When you send a new prompt, **all** tasks on the panel are cleared (finished or not), since a new prompt is a new job; Claude reports again whatever is still needed.
 - With more than 6 tasks, only the latest 6 are shown, and earlier ones collapse into "N earlier tasks above".
+- When the space above the prompt is short (for example, while running tools fill the screen), the panel shrinks instead of being cut off: it first drops the "Working" row, then lists only the tasks around the current one (the rest counted as "+N not shown" in the header), and with only one row left it switches to the one-line `compact` layout.
 
 Estimated time remaining = average duration of finished tasks × remaining tasks. At least one task must be finished before it is shown.
 

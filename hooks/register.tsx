@@ -20,6 +20,8 @@ type Strings = {
   allDone: string
   working: string
   hiddenEarlier: (n: number) => string
+  /** 空間不夠時，標題列上「另有幾個任務沒列出」 */
+  outside: (n: number) => string
   /** 已經過多久（含單位的字串，例如 12s、3m） */
   elapsed: (t: string) => string
   /** 已完成的任務花了多久 */
@@ -45,6 +47,7 @@ const STR: Record<Lang, Strings> = {
     allDone: 'All done',
     working: 'Working',
     hiddenEarlier: n => `… ${n} earlier task${n === 1 ? '' : 's'} hidden`,
+    outside: n => `+${n} not shown`,
     elapsed: t => `${t} elapsed`,
     took: t => `took ${t}`,
     eta: t => `~${t} left`,
@@ -68,6 +71,7 @@ const STR: Record<Lang, Strings> = {
     allDone: '全部完成',
     working: '處理中',
     hiddenEarlier: n => `… 前面還有 ${n} 個較早的任務`,
+    outside: n => `另有 ${n} 個未列出`,
     elapsed: t => `已 ${t}`,
     took: t => `用 ${t}`,
     eta: t => `預估剩餘 ~${t}`,
@@ -403,7 +407,7 @@ export const register: Register = (on, options) => {
 
     if (tasks.length === 0 && style.layout !== 'detailed') return next(e)
 
-    if (style.layout === 'compact') {
+    const compactRow = () => {
       const cur = tasks.find(t => t.status === 'in_progress') ?? tasks.find(t => t.status === 'pending')
       return (
         <Box paddingX={1} gap={1}>
@@ -418,6 +422,7 @@ export const register: Register = (on, options) => {
         </Box>
       )
     }
+    if (style.layout === 'compact') return compactRow()
 
     if (style.layout === 'header') {
       return (
@@ -430,11 +435,32 @@ export const register: Register = (on, options) => {
     }
 
     // 固定順序（依加入順序），列的位置不會因狀態改變而跳動；太多時只顯示最近的
-    const shown = tasks.slice(-MAX_ROWS)
-    const hidden = tasks.length - shown.length
+    let shown = tasks.slice(-MAX_ROWS)
+    let hidden = tasks.length - shown.length
+    let showWorking = startedAt !== null
+    // 放不下時（例如執行中的工具佔掉畫面，面板只剩一兩列）主動縮小，而不是被裁掉、只剩「↑ n more」：
+    // 先拿掉「處理中」列（轉圈提示已經有狀態）；還放不下就只顯示目前任務附近幾列，其餘的數量寫在標題列；
+    // 連標題加一列都放不下就改成單行的 compact
+    const room = e.props.maxRows
+    let outside = 0
+    if (tasks.length > 0 && 1 + (hidden > 0 ? 1 : 0) + shown.length + (showWorking ? 1 : 0) > room) {
+      showWorking = false
+      if (1 + (hidden > 0 ? 1 : 0) + shown.length > room) {
+        if (room < 2) return compactRow()
+        const k = Math.min(MAX_ROWS, room - 1)
+        let anchor = tasks.findIndex(t => t.status === 'in_progress')
+        if (anchor < 0) anchor = tasks.findIndex(t => t.status === 'pending')
+        if (anchor < 0) anchor = tasks.length - 1
+        // 目前任務前面留一列（剛完成的），其餘往後
+        const start = Math.max(0, Math.min(anchor - 1, tasks.length - k))
+        shown = tasks.slice(start, start + k)
+        hidden = 0
+        outside = tasks.length - shown.length
+      }
+    }
     const iconW = style.icons === 'none' ? 0 : 3
     const workingRow =
-      startedAt === null ? null : (
+      !showWorking ? null : (
         <Box key="working" gap={1}>
           {iconW > 0 ? (
             <Box width={iconW}>
@@ -463,6 +489,7 @@ export const register: Register = (on, options) => {
           <Box width={5}>
             <Text bold>{`${Math.round(total)}%`}</Text>
           </Box>
+          {outside > 0 ? <Text dimColor>{s.outside(outside)}</Text> : null}
           <Text dimColor>{eta}</Text>
         </Box>
         {hidden > 0 ? <Text dimColor>{s.hiddenEarlier(hidden)}</Text> : null}
