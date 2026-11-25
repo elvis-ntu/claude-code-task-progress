@@ -1,5 +1,5 @@
 {
-  "name": "elvis-local",
+  "name": "claude-code-task-progress",
   "owner": { "name": "Elvis" },
   "plugins": [{ "name": "task-progress", "source": "./" }]
 }

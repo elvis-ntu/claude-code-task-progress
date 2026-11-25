@@ -49,7 +49,7 @@ After installing, run `/reload-plugins` or start a new session.
 ### Update
 
 ```bash
-claude plugin marketplace update elvis-local
+claude plugin marketplace update claude-code-task-progress
 claude plugin update task-progress
 ```
 
@@ -111,12 +111,12 @@ Estimated time remaining = average duration of finished tasks × remaining tasks
 
 ## Configuring styles
 
-Add `pluginConfigs` to `~/.claude/settings.json`. The key format is `task-progress@<marketplace name>`; this repo's marketplace name is `elvis-local` (set in `.claude-plugin/marketplace.json`):
+Add `pluginConfigs` to `~/.claude/settings.json`. The key format is `task-progress@<marketplace name>`; this repo's marketplace name is `claude-code-task-progress` (set in `.claude-plugin/marketplace.json`):
 
 ```json
 {
   "pluginConfigs": {
-    "task-progress@elvis-local": {
+    "task-progress@claude-code-task-progress": {
       "options": {
         "language": "auto",
         "barStyle": "candy",

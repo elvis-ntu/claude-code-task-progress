@@ -49,7 +49,7 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 ### 更新
 
 ```bash
-claude plugin marketplace update elvis-local
+claude plugin marketplace update claude-code-task-progress
 claude plugin update task-progress
 ```
 
@@ -111,12 +111,12 @@ claude plugin update task-progress
 
 ## 設定樣式
 
-在 `~/.claude/settings.json` 加上 `pluginConfigs`。key 的格式是 `task-progress@<marketplace 名稱>`，這個 repo 的 marketplace 名稱是 `elvis-local`（寫在 `.claude-plugin/marketplace.json`）：
+在 `~/.claude/settings.json` 加上 `pluginConfigs`。key 的格式是 `task-progress@<marketplace 名稱>`，這個 repo 的 marketplace 名稱是 `claude-code-task-progress`（寫在 `.claude-plugin/marketplace.json`）：
 
 ```json
 {
   "pluginConfigs": {
-    "task-progress@elvis-local": {
+    "task-progress@claude-code-task-progress": {
       "options": {
         "language": "auto",
         "barStyle": "candy",
