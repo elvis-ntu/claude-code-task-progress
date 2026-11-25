@@ -49,7 +49,7 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 ### 更新
 
 ```bash
-claude plugin marketplace update elvis-ntu/claude-code-task-progress
+claude plugin marketplace update elvis-local
 claude plugin update task-progress
 ```
 

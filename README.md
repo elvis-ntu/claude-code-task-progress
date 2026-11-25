@@ -49,7 +49,7 @@ After installing, run `/reload-plugins` or start a new session.
 ### Update
 
 ```bash
-claude plugin marketplace update elvis-ntu/claude-code-task-progress
+claude plugin marketplace update elvis-local
 claude plugin update task-progress
 ```
 
