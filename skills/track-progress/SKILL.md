@@ -1,6 +1,6 @@
 ---
 name: track-progress
-description: Use whenever a reply will involve tool calls (even a single step) so the task-progress panel shows real progress. Report with mcp__task-progress__set_tasks instead of update_plan, TodoWrite or TaskCreate. 只要會用到工具（即使只有一步），就用 set_tasks 回報任務進度。
+description: Use whenever a reply will involve tool calls (even a single step) so the task-progress panel shows real progress. Report with mcp__task-progress__set_tasks instead of update_plan, TodoWrite or TaskCreate.
 ---
 
 # Track progress with set_tasks

@@ -1,13 +1,24 @@
 {
   "name": "task-progress",
-  "version": "0.1.2",
-  "description": "在輸入框上方顯示每個任務的進度條、百分比與預估剩餘時間。",
+  "version": "0.2.0",
+  "description": "Shows a progress bar, percentage and estimated time left for every task above the prompt.",
   "types": "./types/index.d.ts",
   "userConfig": {
+    "language": {
+      "type": "string",
+      "title": "Language",
+      "description": "auto=follow Claude Code's language setting, then the system locale (English if neither is recognized); en=English; zh-TW=繁體中文",
+      "default": "auto",
+      "options": [
+        "auto",
+        "en",
+        "zh-TW"
+      ]
+    },
     "barStyle": {
       "type": "string",
-      "title": "進度條樣式",
-      "description": "solid=實心色塊；blocks=█░；dots=●○；line=━─；segments=▰▱；ascii=[##--]；桌面版專用 SVG：candy=光澤圓角加圖示、stripes=斜紋膠囊、glossy=分格漸層、neon=發光管狀（終端機自動退回字元樣式）",
+      "title": "Progress bar style",
+      "description": "solid=solid blocks; blocks=█░; dots=●○; line=━─; segments=▰▱; ascii=[##--]; desktop-only SVG: candy=glossy rounded with icon, stripes=striped capsule, glossy=segmented gradient, neon=glowing tube (the terminal falls back to a character style)",
       "default": "solid",
       "options": [
         "solid",
@@ -24,8 +35,8 @@
     },
     "iconSet": {
       "type": "string",
-      "title": "圖示組",
-      "description": "symbols=✓●○；emoji=✅🔄⏳；circles=●◐○；minimal=+>-；none=不顯示",
+      "title": "Icon set",
+      "description": "symbols=✓●○; emoji=✅🔄⏳; circles=●◐○; minimal=+>-; none=no icons",
       "default": "symbols",
       "options": [
         "symbols",
@@ -37,8 +48,8 @@
     },
     "layout": {
       "type": "string",
-      "title": "版面",
-      "description": "detailed=逐項顯示；compact=單行摘要；header=只顯示整體進度",
+      "title": "Layout",
+      "description": "detailed=one row per task; compact=single-line summary; header=overall progress only",
       "default": "detailed",
       "options": [
         "detailed",
@@ -48,7 +59,7 @@
     },
     "theme": {
       "type": "string",
-      "title": "配色主題",
+      "title": "Color theme",
       "description": "default / ocean / sunset / neon / mono",
       "default": "default",
       "options": [
@@ -61,8 +72,8 @@
     },
     "trackStyle": {
       "type": "string",
-      "title": "未完成部分的樣式",
-      "description": "filled=灰底；dashed=灰色虛線",
+      "title": "Unfilled part style",
+      "description": "filled=grey background; dashed=grey dashed line",
       "default": "filled",
       "options": [
         "filled",
@@ -71,8 +82,8 @@
     },
     "showWorking": {
       "type": "string",
-      "title": "顯示「處理中」列",
-      "description": "on=Claude 處理時顯示處理中與經過秒數；off=只顯示任務",
+      "title": "Show the \"Working\" row",
+      "description": "on=show a Working row with elapsed seconds while Claude is busy; off=tasks only",
       "default": "on",
       "options": [
         "on",
@@ -81,8 +92,8 @@
     },
     "spinnerProgress": {
       "type": "string",
-      "title": "轉圈提示加上任務進度",
-      "description": "on=在 Unfurling… 這類提示後面加上任務進度；off=維持原樣",
+      "title": "Add task progress to the spinner",
+      "description": "on=append task progress after spinner lines such as Unfurling…; off=leave the spinner as is",
       "default": "on",
       "options": [
         "on",

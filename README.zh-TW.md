@@ -117,6 +117,7 @@ claude plugin update task-progress
   "pluginConfigs": {
     "task-progress@elvis-local": {
       "options": {
+        "language": "auto",
         "barStyle": "candy",
         "iconSet": "symbols",
         "layout": "detailed",
@@ -133,6 +134,16 @@ claude plugin update task-progress
 改完執行 `/reload-plugins` 生效。每個欄位都是選填，沒填就用預設值。
 
 > 這個 mod 也把這些選項宣告成 `userConfig`，所以 Claude Code 的 `/config` 設定畫面也可能有下拉選單。但我沒有確認過選單裡實際顯示的位置，確定能用的是改 `settings.json`。
+
+### 語言 `language`
+
+| 值 | 效果 |
+|---|---|
+| `auto`（預設） | 先看 Claude Code 自己的語言設定（若有提供），再看 `LC_ALL` / `LC_MESSAGES` / `LANG` 環境變數，最後看系統 locale；都認不出來就用英文 |
+| `en` | English |
+| `zh-TW` | 繁體中文 |
+
+這會影響 mod 輸出的所有文字：面板文字、`/task-progress` 的訊息、`set_tasks` 的回傳，以及附在每個提問旁邊的提醒。如果面板的語言不對，請明確指定 `language`。
 
 ### 進度條樣式 `barStyle`
 

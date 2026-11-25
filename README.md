@@ -117,6 +117,7 @@ Add `pluginConfigs` to `~/.claude/settings.json`. The key format is `task-progre
   "pluginConfigs": {
     "task-progress@elvis-local": {
       "options": {
+        "language": "auto",
         "barStyle": "candy",
         "iconSet": "symbols",
         "layout": "detailed",
@@ -133,6 +134,16 @@ Add `pluginConfigs` to `~/.claude/settings.json`. The key format is `task-progre
 Run `/reload-plugins` to apply. Every field is optional; omitted ones use the defaults.
 
 > This mod also declares these options as `userConfig`, so Claude Code's `/config` screen may offer dropdowns too. I haven't confirmed where they actually appear there; editing `settings.json` is the way known to work.
+
+### Language `language`
+
+| Value | Look |
+|---|---|
+| `auto` (default) | Follow Claude Code's own language setting if it exposes one, then the `LC_ALL` / `LC_MESSAGES` / `LANG` variables, then the system locale; English if none is recognized |
+| `en` | English |
+| `zh-TW` | 繁體中文 |
+
+This changes everything the mod prints: the panel text, the `/task-progress` messages, the `set_tasks` result and the reminder attached to each prompt. If the panel shows the wrong language, set `language` explicitly.
 
 ### Bar style `barStyle`
 

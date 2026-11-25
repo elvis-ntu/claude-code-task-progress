@@ -1,8 +1,8 @@
 export type ProgressTask = {
   id?: string
-  /** 真實進度 0-99，只有進行中的任務、且有回報時才有 */
+  /** Real progress 0-99; only present for an in-progress task that reported counts */
   pct?: number
-  /** 進行中任務的已完成數與總數（set_tasks 必填） */
+  /** Finished and total counts of an in-progress task (required by set_tasks) */
   done?: number
   total?: number
   title: string

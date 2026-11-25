@@ -1,5 +1,5 @@
 import { atom, read, update } from 'claude-code'
-import type { ElementConstructor, Register, SvgProps, ToolSpec } from 'claude-code'
+import type { ElementConstructor, EngineInterface, Register, SvgProps, ToolSpec } from 'claude-code'
 
 import type { ProgressTask } from '../types'
 
@@ -11,14 +11,131 @@ const turnAtom = atom({ plugin: 'task-progress', key: 'turnStartedAt' } as const
 const TICK_MS = 120
 const tickAtom = atom({ plugin: 'task-progress', key: 'tick' } as const, 0)
 
+// ---------- i18n：所有會顯示給使用者（或模型）的文字都放在這裡 ----------
+type Lang = 'en' | 'zh-TW'
+type Strings = {
+  /** 附在每個提問旁邊的提醒（只給模型看） */
+  guide: string
+  panelTitle: (done: number, total: number) => string
+  allDone: string
+  working: string
+  hiddenEarlier: (n: number) => string
+  /** 已經過多久（含單位的字串，例如 12s、3m） */
+  elapsed: (t: string) => string
+  /** 已完成的任務花了多久 */
+  took: (t: string) => string
+  eta: (t: string) => string
+  /** 內建轉圈提示後面接的任務進度 */
+  spinner: (done: number, total: number, cur?: { done: number; total: number }) => string
+  updated: (n: number) => string
+  denyInProgress: (title: string) => string
+  commandDesc: string
+  cleared: string
+  demoLoaded: string
+  saverOn: string
+  saverOff: string
+  demoTitles: readonly [string, string, string, string]
+}
+
+const STR: Record<Lang, Strings> = {
+  en: {
+    guide:
+      'Whenever this reply will use any tool, first count the total amount of work, then report progress with mcp__task-progress__set_tasks (not update_plan), even for a single step.',
+    panelTitle: (d, n) => `Task progress ${d}/${n}`,
+    allDone: 'All done',
+    working: 'Working',
+    hiddenEarlier: n => `… ${n} earlier task${n === 1 ? '' : 's'} hidden`,
+    elapsed: t => `${t} elapsed`,
+    took: t => `took ${t}`,
+    eta: t => `~${t} left`,
+    spinner: (d, n, cur) => `… tasks ${d}/${n}${cur ? `, current ${cur.done}/${cur.total}` : ''}`,
+    updated: n => `Updated ${n} task${n === 1 ? '' : 's'}`,
+    denyInProgress: title =>
+      `"${title}" is in_progress, so it must also report total (how many items in all, at least 1) and done (how many are finished, 0 to total). Count the work first, then call again.`,
+    commandDesc: 'Task progress panel: demo shows a sample, clear empties it, saver toggles token-saver mode',
+    cleared: 'Task progress cleared.',
+    demoLoaded: 'Sample tasks loaded; look above the prompt.',
+    saverOn:
+      'Token-saver mode: ON. The set_tasks definition is no longer attached to every request; Claude loads it only when needed. Takes effect from the next prompt. Run /task-progress saver again to turn it off.',
+    saverOff:
+      'Token-saver mode: OFF. The set_tasks definition is attached to every request. Takes effect from the next prompt. Run /task-progress saver again to turn it on.',
+    demoTitles: ['Survey the folder', 'Reorganize the files', 'Add a README', 'Verify the result'],
+  },
+  'zh-TW': {
+    guide:
+      '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。',
+    panelTitle: (d, n) => `任務進度 ${d}/${n}`,
+    allDone: '全部完成',
+    working: '處理中',
+    hiddenEarlier: n => `… 前面還有 ${n} 個較早的任務`,
+    elapsed: t => `已 ${t}`,
+    took: t => `用 ${t}`,
+    eta: t => `預估剩餘 ~${t}`,
+    spinner: (d, n, cur) => `… 任務 ${d}/${n}${cur ? `，進行中 ${cur.done}/${cur.total}` : ''}`,
+    updated: n => `已更新 ${n} 個任務`,
+    denyInProgress: title =>
+      `「${title}」是進行中，必須同時回報 total（總共幾件，至少 1）與 done（已完成幾件，0 到 total）。請先把工作量數出來再呼叫。`,
+    commandDesc: '任務進度面板：demo 顯示範例，clear 清空，saver 切換省 token 模式',
+    cleared: '已清空任務進度。',
+    demoLoaded: '已載入範例任務，請看輸入框上方。',
+    saverOn:
+      '省 token 模式：開。set_tasks 的定義不再附在每次請求裡，Claude 需要時才會載入，下一個提問起生效。再輸入一次 /task-progress saver 可關閉。',
+    saverOff:
+      '省 token 模式：關。set_tasks 的定義會附在每次請求裡，下一個提問起生效。再輸入一次 /task-progress saver 可開啟。',
+    demoTitles: ['盤點資料夾', '整理檔案結構', '補上 README', '驗證結果'],
+  },
+}
+
+// 把一段文字（語言設定或 locale）對應到支援的語言；認不出來回傳 null
+function toLang(v: unknown): Lang | null {
+  if (typeof v !== 'string' || v.trim() === '') return null
+  if (/繁|台灣|臺灣|traditional|^zh[-_]?(tw|hk|mo|hant)/i.test(v.trim())) return 'zh-TW'
+  if (/^en|english|英文/i.test(v.trim())) return 'en'
+  return null
+}
+
+// 決定介面語言：外掛設定 language（en / zh-TW）優先；auto 時依序看
+// Claude Code 自己的語言設定、環境變數 LC_ALL / LC_MESSAGES / LANG、系統 locale；都沒有就用英文
+async function resolveLang($: EngineInterface, pref: unknown): Promise<Lang> {
+  if (pref === 'en' || pref === 'zh-TW') return pref
+  try {
+    const row = (await $.config.list()).find(r => r.key === 'language' || r.key === 'responseLanguage')
+    if (typeof row?.value === 'string' && row.value.trim() !== '') return toLang(row.value) ?? 'en'
+  } catch {
+    // 讀不到就往下
+  }
+  try {
+    const g = globalThis as {
+      process?: { env?: Record<string, string | undefined> }
+      Intl?: { DateTimeFormat: () => { resolvedOptions: () => { locale: string } } }
+    }
+    const env = g.process?.env
+    for (const k of ['LC_ALL', 'LC_MESSAGES', 'LANG']) {
+      const v = env?.[k]
+      if (v && v !== 'C' && v !== 'POSIX') return toLang(v) ?? 'en'
+    }
+    return toLang(g.Intl?.DateTimeFormat().resolvedOptions().locale) ?? 'en'
+  } catch {
+    return 'en'
+  }
+}
+
+// 語言只在第一次用到時解析一次（reload 後模組重新載入，會重算）。
+// 必須是頂層的函式宣告：驗證器只允許把 $ 傳給這種函式
+let stringsCache: Promise<Strings> | undefined
+function getS($: EngineInterface, pref: unknown): Promise<Strings> {
+  return (stringsCache ??= resolveLang($, pref).then(l => STR[l]))
+}
+
 export const register: Register = (on, options) => {
+  stringsCache = undefined
   const style = readStyle(options)
   // 請 Claude 用 set_tasks 回報進度（桌面版另有內建的 update_plan，不指示的話它會優先用內建的）
   // 省 token 模式開啟時不加，避免每次請求多帶這段文字
   on('prompt.compose', async ($, e, next) => {
     const result = await next(e)
     if ((await $.store.get('tokenSaver')) === true) return result
-    return { sections: [...result.sections, { id: 'task-progress:guide', scope: 'session', text: GUIDE }] }
+    return { sections: [...result.sections, { id: 'task-progress:guide', scope: 'session', text: (await getS($, options?.language)).guide }] }
   })
 
   // 新的提問就是新的一件工作：清掉上一件留下的所有任務，不論有沒有做完（還需要的，Claude 會重新回報）
@@ -27,7 +144,7 @@ export const register: Register = (on, options) => {
     // 在提問旁邊附一句固定提醒（只給模型看；不讀也不改使用者輸入的文字）。
     // 斜線指令、系統產生的提問、省 token 模式都不附
     if (e.command || e.isMeta || (await $.store.get('tokenSaver')) === true) return next(e)
-    return next({ ...e, context: [...(e.context ?? []), GUIDE] })
+    return next({ ...e, context: [...(e.context ?? []), (await getS($, options?.language)).guide] })
   })
 
   // 一輪處理的開始與結束（只看主對話，不看子代理）
@@ -50,8 +167,9 @@ export const register: Register = (on, options) => {
     if (tasks.length === 0) return next(e)
     const doneN = tasks.filter(t => t.status === 'completed').length
     const cur = tasks.find(t => t.status === 'in_progress')
-    const detail = cur?.total !== undefined && cur.done !== undefined ? `，進行中 ${cur.done}/${cur.total}` : ''
-    return next({ ...e, props: { ...e.props, suffix: `… 任務 ${doneN}/${tasks.length}${detail}` } })
+    const s = await getS($, options?.language)
+    const progress = cur?.total !== undefined && cur.done !== undefined ? { done: cur.done, total: cur.total } : undefined
+    return next({ ...e, props: { ...e.props, suffix: s.spinner(doneN, tasks.length, progress) } })
   })
 
   // /task-progress demo：填入範例任務；/task-progress clear：清空
@@ -66,38 +184,36 @@ export const register: Register = (on, options) => {
     await $.tool.register(toolSpec(saver))
     await $.command.register({
       name: 'task-progress',
-      description: '任務進度面板：demo 顯示範例，clear 清空，saver 切換省 token 模式',
+      description: (await getS($, options?.language)).commandDesc,
     })
     return next(e)
   })
 
   on('command.run', { command: 'task-progress' }, async ($, e) => {
     const arg = String(e.args ?? '').trim()
+    const s = await getS($, options?.language)
     if (arg === 'clear') {
       await update($, tasksAtom, () => [])
-      return { text: '已清空任務進度。' }
+      return { text: s.cleared }
     }
     if (arg === 'saver' || arg === 'saver on' || arg === 'saver off') {
       const wasOn = (await $.store.get('tokenSaver')) === true
       const isOn = arg === 'saver on' ? true : arg === 'saver off' ? false : !wasOn
       await $.store.set('tokenSaver', isOn)
       await $.tool.register(toolSpec(isOn))
-      return {
-        text: isOn
-          ? '省 token 模式：開。set_tasks 的定義不再附在每次請求裡，Claude 需要時才會載入，下一個提問起生效。再輸入一次 /task-progress saver 可關閉。'
-          : '省 token 模式：關。set_tasks 的定義會附在每次請求裡，下一個提問起生效。再輸入一次 /task-progress saver 可開啟。',
-      }
+      return { text: isOn ? s.saverOn : s.saverOff }
     }
     const now = await $.clock.now()
     const min = 60000
+    const [t1, t2, t3, t4] = s.demoTitles
     const demo: ProgressTask[] = [
-      { title: '盤點資料夾', status: 'completed', startedAt: now - 6 * min, doneAt: now - 4 * min },
-      { title: '整理檔案結構', status: 'completed', startedAt: now - 4 * min, doneAt: now - 1 * min },
-      { title: '補上 README', status: 'in_progress', startedAt: now - 1 * min, doneAt: null, pct: 50, done: 1, total: 2 },
-      { title: '驗證結果', status: 'pending', startedAt: null, doneAt: null },
+      { title: t1, status: 'completed', startedAt: now - 6 * min, doneAt: now - 4 * min },
+      { title: t2, status: 'completed', startedAt: now - 4 * min, doneAt: now - 1 * min },
+      { title: t3, status: 'in_progress', startedAt: now - 1 * min, doneAt: null, pct: 50, done: 1, total: 2 },
+      { title: t4, status: 'pending', startedAt: null, doneAt: null },
     ]
     await update($, tasksAtom, () => demo)
-    return { text: '已載入範例任務，請看輸入框上方。' }
+    return { text: s.demoLoaded }
   })
 
   // 每次待辦清單更新時，記錄各任務的開始／完成時間
@@ -150,9 +266,7 @@ export const register: Register = (on, options) => {
       t => t.status === 'in_progress' && !(typeof t.total === 'number' && t.total >= 1 && typeof t.done === 'number' && t.done >= 0 && t.done <= t.total),
     )
     if (bad) {
-      return {
-        deny: `「${bad.title}」是進行中，必須同時回報 total（總共幾件，至少 1）與 done（已完成幾件，0 到 total）。請先把工作量數出來再呼叫。`,
-      }
+      return { deny: (await getS($, options?.language)).denyInProgress(bad.title) }
     }
     const now = await $.clock.now()
     await update($, tasksAtom, prev => {
@@ -174,7 +288,7 @@ export const register: Register = (on, options) => {
       }
       return out
     })
-    const text = `已更新 ${list.length} 個任務`
+    const text = (await getS($, options?.language)).updated(list.length)
     return { result: text, text }
   })
 
@@ -218,6 +332,7 @@ export const register: Register = (on, options) => {
     if (e.props.hasSurvey || (tasks.length === 0 && startedAt === null)) return next(e)
 
     const now = await $.clock.now()
+    const s = await getS($, options?.language)
     const { Box, Text } = $.ui.resolve(e)
     // 桌面版／編輯器才有 Svg；終端機退回字元樣式
     const ui = $.ui.resolve(e) as unknown as { Svg?: ElementConstructor<SvgProps> }
@@ -262,13 +377,13 @@ export const register: Register = (on, options) => {
       )
     }
 
-    const header = `任務進度 ${doneN}/${tasks.length}  ${Math.round(total)}%`
+    const header = `${s.panelTitle(doneN, tasks.length)}  ${Math.round(total)}%`
     const elapsed = startedAt === null ? 0 : Math.max(0, Math.floor((now - startedAt) / 1000))
     // 不確定總量的進度，不給百分比：只畫一段來回移動的亮塊，旁邊是真實經過的秒數
     const sweep = () => {
       if (Svg) {
         const d = svgSweep(tick, th.active, th.pending)
-        return <Svg source={d.source} alt="處理中" width={d.w} height={d.h} />
+        return <Svg source={d.source} alt={s.working} width={d.w} height={d.h} />
       }
       const w = BAR_W
       const seg = 4
@@ -284,7 +399,7 @@ export const register: Register = (on, options) => {
       )
     }
     const spin = ['◐', '◓', '◑', '◒'][tick % 4] ?? '◐'
-    const eta = overallEta(tasks)
+    const eta = overallEta(tasks, s)
 
     if (tasks.length === 0 && style.layout !== 'detailed') return next(e)
 
@@ -297,7 +412,7 @@ export const register: Register = (on, options) => {
           {cur ? (
             <Text color={color(cur.status)}>{`${ic[cur.status]} ${clip(cur.title, 24)}`.trim()}</Text>
           ) : (
-            <Text color={th.done}>全部完成</Text>
+            <Text color={th.done}>{s.allDone}</Text>
           )}
           <Text dimColor>{eta}</Text>
         </Box>
@@ -327,13 +442,13 @@ export const register: Register = (on, options) => {
             </Box>
           ) : null}
           <Box width={nameW}>
-            <Text wrap="truncate-end">處理中</Text>
+            <Text wrap="truncate-end">{s.working}</Text>
           </Box>
           {sweep()}
           <Box width={5}>
             <Text bold>—</Text>
           </Box>
-          <Text dimColor>{`已 ${elapsed}s`}</Text>
+          <Text dimColor>{s.elapsed(`${elapsed}s`)}</Text>
         </Box>
       )
     if (tasks.length === 0) return <Box flexDirection="column" paddingX={1}>{workingRow}</Box>
@@ -342,7 +457,7 @@ export const register: Register = (on, options) => {
       <Box flexDirection="column" paddingX={1}>
         <Box gap={1}>
           <Box width={iconW + (iconW > 0 ? 1 : 0) + nameW}>
-            <Text bold wrap="truncate-end">{`任務進度 ${doneN}/${tasks.length}`}</Text>
+            <Text bold wrap="truncate-end">{s.panelTitle(doneN, tasks.length)}</Text>
           </Box>
           {bar(total, total >= 100 ? th.done : th.active, total >= 100 ? 'completed' : 'in_progress')}
           <Box width={5}>
@@ -350,7 +465,7 @@ export const register: Register = (on, options) => {
           </Box>
           <Text dimColor>{eta}</Text>
         </Box>
-        {hidden > 0 ? <Text dimColor>{`… 前面還有 ${hidden} 個較早的任務`}</Text> : null}
+        {hidden > 0 ? <Text dimColor>{s.hiddenEarlier(hidden)}</Text> : null}
         {shown.map((t, i) => {
           const pct = eff(t)
           const c = color(t.status)
@@ -368,7 +483,7 @@ export const register: Register = (on, options) => {
               <Box width={5}>
                 <Text bold>{t.status === 'in_progress' && t.pct === undefined ? '—' : `${pct}%`}</Text>
               </Box>
-              <Text dimColor>{rowTime(t, now)}</Text>
+              <Text dimColor>{rowTime(t, now, s)}</Text>
             </Box>
           )
         })}
@@ -410,6 +525,7 @@ const THEMES: Record<string, { done: string; active: string; pending: string; tr
 }
 
 type Style = { bar: string; icons: string; layout: string; theme: string; track: string; working: boolean; spinner: boolean }
+// language 選項（auto / en / zh-TW）不在 Style 裡：它由 resolveLang 處理
 
 function pick(v: unknown, allowed: readonly string[], fallback: string): string {
   return typeof v === 'string' && allowed.includes(v) ? v : fallback
@@ -427,22 +543,22 @@ function readStyle(o: Readonly<Record<string, unknown>> | undefined): Style {
   }
 }
 
-function rowTime(t: ProgressTask, now: number): string {
+function rowTime(t: ProgressTask, now: number, s: Strings): string {
   if (t.status === 'in_progress' && t.startedAt) {
     const n = t.total !== undefined && t.done !== undefined ? `${t.done}/${t.total} · ` : ''
-    return `${n}已 ${fmt(now - t.startedAt)}`
+    return `${n}${s.elapsed(fmt(now - t.startedAt))}`
   }
-  if (t.status === 'completed' && t.startedAt && t.doneAt) return `用 ${fmt(t.doneAt - t.startedAt)}`
+  if (t.status === 'completed' && t.startedAt && t.doneAt) return s.took(fmt(t.doneAt - t.startedAt))
   return ''
 }
 
 // 整體預估：已完成任務的平均耗時 × 剩餘任務數
-function overallEta(tasks: ProgressTask[]): string {
+function overallEta(tasks: ProgressTask[], s: Strings): string {
   const finished = tasks.filter(t => t.status === 'completed' && t.startedAt && t.doneAt)
   const remaining = tasks.filter(t => t.status !== 'completed').length
   if (!finished.length || !remaining) return ''
-  const avg = finished.reduce((s, t) => s + (t.doneAt! - t.startedAt!), 0) / finished.length
-  return `預估剩餘 ~${fmt(avg * remaining)}`
+  const avg = finished.reduce((sum, t) => sum + (t.doneAt! - t.startedAt!), 0) / finished.length
+  return s.eta(fmt(avg * remaining))
 }
 
 function fmt(ms: number): string {
@@ -549,9 +665,7 @@ function svgBar(kind: string, pct: number, c: string, st: Status, dashed: boolea
   )
 }
 
-// 附在每個提問旁邊的提醒（越短越省 token；total/done 是 set_tasks 的必填欄位，工具定義會要求，這裡不重複）
-const GUIDE =
-  '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。'
+// 附在每個提問旁邊的提醒在 STR 裡的 guide（越短越省 token；total/done 是 set_tasks 的必填欄位，工具定義會要求，這裡不重複）
 
 // set_tasks 的工具定義；isDeferred=true 時只有名字在每次請求裡，要用時才由 ToolSearch 載入
 function toolSpec(isDeferred: boolean): ToolSpec {
