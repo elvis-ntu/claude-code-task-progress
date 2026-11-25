@@ -48,6 +48,10 @@ After installing, run `/reload-plugins` or start a new session.
 
 ### Update
 
+Third-party marketplaces don't auto-update by default, so you won't get new versions or any update notice unless you turn it on. To get updates automatically: run `/plugin`, open the **Marketplaces** tab, select `claude-code-task-progress`, and turn on auto-update. Claude Code then checks for new versions in the background after a session starts, and shows `Plugin updated: … · Run /reload-plugins to apply` when one is installed.
+
+To update by hand instead:
+
 ```bash
 claude plugin marketplace update claude-code-task-progress
 claude plugin update task-progress

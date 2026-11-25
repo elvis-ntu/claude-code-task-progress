@@ -48,6 +48,10 @@ claude plugin install task-progress --marketplace elvis-ntu/claude-code-task-pro
 
 ### 更新
 
+第三方 marketplace 預設不會自動更新，沒打開的話不會收到新版，也不會有任何更新提醒。想自動收到更新：執行 `/plugin`，進 **Marketplaces** 分頁，選 `claude-code-task-progress`，把 auto-update 打開。之後 Claude Code 會在 session 開始後於背景檢查新版，裝好時顯示 `Plugin updated: … · Run /reload-plugins to apply`。
+
+或手動更新：
+
 ```bash
 claude plugin marketplace update claude-code-task-progress
 claude plugin update task-progress
