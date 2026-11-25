@@ -22,6 +22,8 @@ type Strings = {
   hiddenEarlier: (n: number) => string
   /** 空間不夠時，標題列上「另有幾個任務沒列出」 */
   outside: (n: number) => string
+  /** /task-progress list 沒有任務時 */
+  noTasks: string
   /** 已經過多久（含單位的字串，例如 12s、3m） */
   elapsed: (t: string) => string
   /** 已完成的任務花了多久 */
@@ -47,7 +49,8 @@ const STR: Record<Lang, Strings> = {
     allDone: 'All done',
     working: 'Working',
     hiddenEarlier: n => `… ${n} earlier task${n === 1 ? '' : 's'} hidden`,
-    outside: n => `+${n} not shown`,
+    outside: n => `+${n} not shown (/task-progress list)`,
+    noTasks: 'No tasks right now.',
     elapsed: t => `${t} elapsed`,
     took: t => `took ${t}`,
     eta: t => `~${t} left`,
@@ -55,7 +58,7 @@ const STR: Record<Lang, Strings> = {
     updated: n => `Updated ${n} task${n === 1 ? '' : 's'}`,
     denyInProgress: title =>
       `"${title}" is in_progress, so it must also report total (how many items in all, at least 1) and done (how many are finished, 0 to total). Count the work first, then call again.`,
-    commandDesc: 'Task progress panel: demo shows a sample, clear empties it, saver toggles token-saver mode',
+    commandDesc: 'Task progress panel: list prints every task, demo shows a sample, clear empties it, saver toggles token-saver mode',
     cleared: 'Task progress cleared.',
     demoLoaded: 'Sample tasks loaded; look above the prompt.',
     saverOn:
@@ -71,7 +74,8 @@ const STR: Record<Lang, Strings> = {
     allDone: '全部完成',
     working: '處理中',
     hiddenEarlier: n => `… 前面還有 ${n} 個較早的任務`,
-    outside: n => `另有 ${n} 個未列出`,
+    outside: n => `另有 ${n} 個未列出（/task-progress list）`,
+    noTasks: '目前沒有任務。',
     elapsed: t => `已 ${t}`,
     took: t => `用 ${t}`,
     eta: t => `預估剩餘 ~${t}`,
@@ -79,7 +83,7 @@ const STR: Record<Lang, Strings> = {
     updated: n => `已更新 ${n} 個任務`,
     denyInProgress: title =>
       `「${title}」是進行中，必須同時回報 total（總共幾件，至少 1）與 done（已完成幾件，0 到 total）。請先把工作量數出來再呼叫。`,
-    commandDesc: '任務進度面板：demo 顯示範例，clear 清空，saver 切換省 token 模式',
+    commandDesc: '任務進度面板：list 列出全部任務，demo 顯示範例，clear 清空，saver 切換省 token 模式',
     cleared: '已清空任務進度。',
     demoLoaded: '已載入範例任務，請看輸入框上方。',
     saverOn:
@@ -199,6 +203,21 @@ export const register: Register = (on, options) => {
     if (arg === 'clear') {
       await update($, tasksAtom, () => [])
       return { text: s.cleared }
+    }
+    if (arg === 'list') {
+      // 完整清單印在對話裡：不受面板高度與 MAX_ROWS 限制
+      const tasks = await read($, tasksAtom)
+      if (tasks.length === 0) return { text: s.noTasks }
+      const now = await $.clock.now()
+      const ic = ICONS[style.icons === 'none' ? 'symbols' : style.icons] ?? ICONS.symbols!
+      const pct = Math.round(tasks.reduce((sum, t) => sum + eff(t), 0) / tasks.length)
+      const doneN = tasks.filter(t => t.status === 'completed').length
+      const lines = tasks.map(t => {
+        const time = rowTime(t, now, s)
+        const p = t.status === 'in_progress' && t.pct === undefined ? '—' : `${eff(t)}%`
+        return `${ic[t.status]} ${t.title}  ${p}${time ? `  ${time}` : ''}`
+      })
+      return { text: [`${s.panelTitle(doneN, tasks.length)}  ${pct}%`, ...lines].join('\n') }
     }
     if (arg === 'saver' || arg === 'saver on' || arg === 'saver off') {
       const wasOn = (await $.store.get('tokenSaver')) === true
@@ -349,12 +368,15 @@ export const register: Register = (on, options) => {
     const color = (st: Status) => (st === 'completed' ? th.done : st === 'in_progress' ? th.active : th.pending)
 
     // 進度條：每欄固定寬度，桌面版（比例字型）也會對齊
+    // auto：桌面版用 candy，終端機用 solid
+    const chosen = style.bar === 'auto' ? (Svg ? 'candy' : 'solid') : style.bar
     const bar = (pct: number, c: string, st: Status = 'in_progress') => {
-      if (Svg && SVG_KINDS.includes(style.bar)) {
-        const d = svgBar(style.bar, pct, c, st, style.track === 'dashed')
+      // 桌面版一律畫 SVG：比例字型下字元寬度不固定，字元進度條會超出欄寬、蓋到旁邊的百分比
+      if (Svg) {
+        const d = svgBar(SVG_KINDS.includes(chosen) ? chosen : 'flat', pct, c, st, style.track === 'dashed')
         return <Svg source={d.source} alt={`${pct}%`} width={d.w} height={d.h} />
       }
-      const kind = FALLBACK[style.bar] ?? style.bar
+      const kind = FALLBACK[chosen] ?? chosen
       const filled = Math.round((pct / 100) * BAR_W)
       if (kind === 'solid') {
         return (
@@ -438,14 +460,16 @@ export const register: Register = (on, options) => {
     let shown = tasks.slice(-MAX_ROWS)
     let hidden = tasks.length - shown.length
     let showWorking = startedAt !== null
-    // 放不下時（例如執行中的工具佔掉畫面，面板只剩一兩列）主動縮小，而不是被裁掉、只剩「↑ n more」：
-    // 先拿掉「處理中」列（轉圈提示已經有狀態）；還放不下就只顯示目前任務附近幾列，其餘的數量寫在標題列；
-    // 連標題加一列都放不下就改成單行的 compact
+    // 放不下時（例如執行中的工具佔掉畫面）：
+    // 先拿掉「處理中」列（轉圈提示已經有狀態）；
+    // 還放不下但有 3 列以上：照常畫完整清單，交給 Claude Code 捲動（「↓ n more」，滾輪或 ctrl+x tab 後用方向鍵）；
+    // 只剩 2 列：標題加目前任務，其餘的數量寫在標題列；只剩 1 列：單行的 compact。
+    // 任何時候都能用 /task-progress list 看完整清單
     const room = e.props.maxRows
     let outside = 0
     if (tasks.length > 0 && 1 + (hidden > 0 ? 1 : 0) + shown.length + (showWorking ? 1 : 0) > room) {
       showWorking = false
-      if (1 + (hidden > 0 ? 1 : 0) + shown.length > room) {
+      if (1 + (hidden > 0 ? 1 : 0) + shown.length > room && room < 3) {
         if (room < 2) return compactRow()
         const k = Math.min(MAX_ROWS, room - 1)
         let anchor = tasks.findIndex(t => t.status === 'in_progress')
@@ -560,7 +584,7 @@ function pick(v: unknown, allowed: readonly string[], fallback: string): string 
 
 function readStyle(o: Readonly<Record<string, unknown>> | undefined): Style {
   return {
-    bar: pick(o?.barStyle, ['solid', ...Object.keys(GLYPHS), ...SVG_KINDS], 'solid'),
+    bar: pick(o?.barStyle, ['auto', 'solid', ...Object.keys(GLYPHS), ...SVG_KINDS], 'auto'),
     icons: pick(o?.iconSet, Object.keys(ICONS), 'symbols'),
     layout: pick(o?.layout, ['detailed', 'compact', 'header'], 'detailed'),
     theme: pick(o?.theme, Object.keys(THEMES), 'default'),
@@ -673,6 +697,17 @@ function svgBar(kind: string, pct: number, c: string, st: Status, dashed: boolea
       `<defs><linearGradient id="on" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${hi}"/><stop offset=".5" stop-color="${c}"/><stop offset="1" stop-color="${lo}"/></linearGradient>` +
         `<linearGradient id="off" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#8a93a0"/><stop offset="1" stop-color="#4b5563"/></linearGradient></defs>` +
         `<rect x="0" y="0" width="${W}" height="${h}" rx="5" fill="#1f2937"/>${segs}`,
+    )
+  }
+
+  if (kind === 'flat') {
+    // 字元樣式在桌面版的對應：單純的圓角條
+    const h = 18
+    const fw = ((W - 4) * pct) / 100
+    return wrap(
+      h,
+      `<rect x="1" y="3" width="${W - 2}" height="${h - 6}" rx="6" ${dashed ? 'fill="none" stroke="#9aa1ab" stroke-width="1.5" stroke-dasharray="4 3"' : 'fill="#3a4049"'}/>` +
+        (fw > 0 ? `<rect x="2" y="4" width="${fw}" height="${h - 8}" rx="5" fill="${c}"/>` : ''),
     )
   }
 

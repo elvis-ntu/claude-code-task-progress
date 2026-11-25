@@ -1,6 +1,6 @@
 {
   "name": "task-progress",
-  "version": "0.2.1",
+  "version": "0.2.3",
   "description": "Shows a progress bar, percentage and estimated time left for every task above the prompt.",
   "types": "./types/index.d.ts",
   "userConfig": {
@@ -18,9 +18,10 @@
     "barStyle": {
       "type": "string",
       "title": "Progress bar style",
-      "description": "solid=solid blocks; blocks=█░; dots=●○; line=━─; segments=▰▱; ascii=[##--]; desktop-only SVG: candy=glossy rounded with icon, stripes=striped capsule, glossy=segmented gradient, neon=glowing tube (the terminal falls back to a character style)",
-      "default": "solid",
+      "description": "auto=candy in the desktop app, solid in the terminal; solid=solid blocks; blocks=█░; dots=●○; line=━─; segments=▰▱; ascii=[##--]; desktop-only SVG: candy=glossy rounded with icon, stripes=striped capsule, glossy=segmented gradient, neon=glowing tube (the terminal falls back to a character style; character styles are drawn as a plain SVG bar in the desktop app)",
+      "default": "auto",
       "options": [
+        "auto",
         "solid",
         "blocks",
         "dots",

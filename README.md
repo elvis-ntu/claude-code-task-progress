@@ -73,6 +73,12 @@ This loads 4 sample tasks and the panel appears above the prompt. To clear them:
 /task-progress clear
 ```
 
+To see every task in the conversation (not limited by the panel's height or its 6-row cap):
+
+```
+/task-progress list
+```
+
 ### 2. Show real task progress
 
 The panel can take its data from four sources. Whenever any of them updates a task, the panel appears automatically:
@@ -105,7 +111,7 @@ The overall percentage is the average across all tasks.
 - When starting a brand-new job, Claude should pass `reset: true` to clear all the old tasks. You can also clear manually with `/task-progress clear`.
 - When you send a new prompt, **all** tasks on the panel are cleared (finished or not), since a new prompt is a new job; Claude reports again whatever is still needed.
 - With more than 6 tasks, only the latest 6 are shown, and earlier ones collapse into "N earlier tasks above".
-- When the space above the prompt is short (for example, while running tools fill the screen), the panel shrinks instead of being cut off: it first drops the "Working" row, then lists only the tasks around the current one (the rest counted as "+N not shown" in the header), and with only one row left it switches to the one-line `compact` layout.
+- When the space above the prompt is short (for example, while running tools fill the screen), the panel first drops the "Working" row. If it still does not fit but has 3 or more rows, the full list scrolls: a "↓ n more" row appears, and you scroll with the mouse wheel, or press ctrl+x tab to focus the panel and use the arrow keys. With only 2 rows it shows the header and the current task (the rest counted as "+N not shown" in the header), and with 1 row it switches to the one-line `compact` layout. `/task-progress list` prints every task at any time.
 
 Estimated time remaining = average duration of finished tasks × remaining tasks. At least one task must be finished before it is shown.
 
@@ -150,7 +156,8 @@ This changes everything the mod prints: the panel text, the `/task-progress` mes
 
 | Value | Look | Works in |
 |---|---|---|
-| `solid` (default) | Solid color blocks | All |
+| `auto` (default) | `candy` in the desktop app, `solid` in the terminal | All |
+| `solid` | Solid color blocks | All |
 | `blocks` | `█░` | All |
 | `dots` | `●○` | All |
 | `line` | `━─` | All |
@@ -161,7 +168,7 @@ This changes everything the mod prints: the panel text, the `/task-progress` mes
 | `glossy` | Ten gradient blocks on a dark base | Desktop |
 | `neon` | Dark tube bar with a glow effect | Desktop |
 
-The last four are SVG graphics and can only be drawn by the desktop app (and the VS Code extension). In the terminal they automatically fall back to the closest character style: `candy` → `solid`, `stripes` and `glossy` → `segments`, `neon` → `line`.
+The last four are SVG graphics and can only be drawn by the desktop app (and the VS Code extension). In the terminal they automatically fall back to the closest character style: `candy` → `solid`, `stripes` and `glossy` → `segments`, `neon` → `line`. The character styles are drawn in the desktop app as a plain rounded SVG bar, because a proportional font cannot keep character bars aligned.
 
 ### Icon set `iconSet`
 
