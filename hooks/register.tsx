@@ -267,12 +267,6 @@ export const register: Register = (on, options) => {
     return { text: s.demoLoaded }
   })
 
-  // 每個工具呼叫都數一次（回報進度本身不算）。這是 plugin 自己算的，完全不經過模型
-  on('tool.call', async ($, e, next) => {
-    if ((e.tool as string) !== 'mcp__task-progress__set_tasks') await update($, toolCountAtom, n => n + 1)
-    return next(e)
-  })
-
   // 每次待辦清單更新時，記錄各任務的開始／完成時間
   on('tool.call', { tool: 'TodoWrite' }, async ($, e, next) => {
     const now = await $.clock.now()
@@ -290,7 +284,9 @@ export const register: Register = (on, options) => {
     return next(e)
   })
 
+  // 同一個 mod 不能註冊兩個沒帶 matcher 的 on('tool.call')，所以計數也併在這裡
   on('tool.call', async ($, e, next) => {
+    if ((e.tool as string) !== 'mcp__task-progress__set_tasks') await update($, toolCountAtom, n => n + 1)
     if ((e.tool as string) === 'mcp__ccd_turn__update_plan') {
       const ran = await next(e)
       if (ran.deny !== undefined || ran.isError === true) return ran
