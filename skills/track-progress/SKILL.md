@@ -13,8 +13,9 @@ Whenever a reply involves tool calls, even a single step, show progress on the t
 2. Call `mcp__task-progress__set_tasks` (load it with ToolSearch if it is deferred). Prefer it over `update_plan`, `TodoWrite` and `TaskCreate`: those have no count fields, so an in-progress task would show no real percentage.
 3. An **in-progress** task must include both `total` and `done`. Calls without them are rejected.
 4. Send only the tasks that changed; updates merge by `title`. Pass `reset: true` when starting a brand-new job.
-5. Report in stages to keep token use low (every extra report that gets its own turn re-reads the whole conversation):
+5. Keep the bar moving without paying for extra turns (a report that gets a turn of its own makes the model re-read the whole conversation; one attached to other tool calls costs nothing extra):
    - List the whole task in **one** call at the start (all steps, the first one `in_progress` with `total` and `done`).
-   - Update again **only when a stage changes** (for example, two or three related steps finished), not after every small step.
-   - Send the `set_tasks` call in the **same turn as your other tool calls** whenever you can, so it does not cost an extra turn.
+   - **After each step finishes**, update it: mark that step `completed` and the next one `in_progress` (with `total` and `done`). Attach this call to the **next batch of tool calls, in the same turn**, so it costs no extra turn.
+   - Never send a `set_tasks` call on its own just to update, and never leave steps unreported until the end and then mark them all complete at once (the bar would sit at 0% and jump to 100%).
+   - Inside a long step that really handles items one at a time, raise `done` between item batches the same way.
    - A single-step task still gets one report, sent together with the tool call itself.

@@ -226,7 +226,7 @@ The desktop app has its own built-in task tool (`update_plan`). If Claude isn't 
 - The `set_tasks` tool description already says "prefer this one even if built-in task or plan tools exist", which Claude sees when choosing a tool.
 - This mod **cannot** change the system prompt: in current Claude Code versions, the `prompt.compose` hook of a user-installed plugin is skipped by a built-in security plugin. That is a deliberate safeguard, so we don't work around it.
 - Instead, on every prompt you send, the mod attaches one short fixed reminder next to it (via the `prompt.submit` hook's `context`). It is for the model only, you don't see it, and it does not read or change your own text. It is skipped for slash commands and in saver mode. In my tests (headless runs with this plugin loaded), Claude reported a 4-step job through `set_tasks` without being told to, in both runs. That is two runs, not a guarantee.
-  - The reminder also asks Claude to **report in stages**: list the whole task in one call, update again only when a stage changes (not after every small step), and send the call in the same turn as other tools when it can. A `set_tasks` call that shares a turn with another tool costs no extra turn; only a call that gets a turn of its own makes the model re-read the whole conversation once more.
+  - The reminder also asks Claude to **keep the bar moving without extra turns**: list the whole task in one call, then after each step finishes mark it done and the next one in progress, attaching that call to the next batch of tool calls in the same turn (never a call on its own, never everything at the end). A `set_tasks` call that shares a turn with another tool costs no extra turn; only a call that gets a turn of its own makes the model re-read the whole conversation once more.
 - The plugin also ships a skill, `track-progress`. Claude decides by itself whether to load a skill, and in a real session it did **not** load it, so don't rely on it alone.
 - If the reminder above is not enough for you, add one line to your own `CLAUDE.md`, which both the terminal and the desktop app read (optional):
 
@@ -273,7 +273,7 @@ These are token counts only; I have not converted them to money, because price d
 
 ### How to reduce it
 
-- **Report less often**: what accumulates is the number of reports, not the fixed 273. Report only between major steps, and send only the tasks that changed. The built-in reminder already asks for this (one call for the whole task, update only when a stage changes, same turn as other tools).
+- **Don't give a report a turn of its own**: what accumulates is the number of turns, not the fixed 273. Attach each report to the next batch of tool calls, and send only the tasks that changed. The built-in reminder already asks for this (one call for the whole task, update after each step, always in the same turn as other tools).
 - **Where the cost really is**: a `set_tasks` call that shares a turn with another tool adds almost nothing. One that gets a turn of its own makes the model re-read the whole conversation (usually at the cheaper cached rate). In practice these stand-alone calls are a modest share of a session's tokens: noticeable, but much smaller than the cost of very long sessions and sub-agents. I have not measured a general figure.
 - **Prefer built-in task tools**: `update_plan` and `TodoWrite` add no cost, at the price of no real percentage for in-progress tasks.
 - **Use saver mode when you don't need bars**: see the next section.

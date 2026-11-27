@@ -10,6 +10,8 @@ const turnAtom = atom({ plugin: 'task-progress', key: 'turnStartedAt' } as const
 // 動畫更新間隔（毫秒）：太慢會像卡住
 const TICK_MS = 120
 const tickAtom = atom({ plugin: 'task-progress', key: 'tick' } as const, 0)
+// 本輪已執行的工具次數：由 plugin 自己數（不經過模型、不花 token），讓進度列在模型還沒回報時也看得出有在動
+const toolCountAtom = atom({ plugin: 'task-progress', key: 'toolCount' } as const, 0)
 
 // ---------- i18n：所有會顯示給使用者（或模型）的文字都放在這裡 ----------
 type Lang = 'en' | 'zh-TW'
@@ -26,6 +28,7 @@ type Strings = {
   noTasks: string
   /** 已經過多久（含單位的字串，例如 12s、3m） */
   elapsed: (t: string) => string
+  toolsUsed: (n: number) => string
   /** 已完成的任務花了多久 */
   took: (t: string) => string
   /** 回答結束時仍沒開始的任務 */
@@ -48,7 +51,7 @@ type Strings = {
 const STR: Record<Lang, Strings> = {
   en: {
     guide:
-      'Whenever this reply will use any tool, first count the total amount of work, then report progress with mcp__task-progress__set_tasks (not update_plan), even for a single step. List the whole task in one call, then update again only when a stage changes, not after every small step; send the call in the same turn as other tools when you can.',
+      'Whenever this reply will use any tool, first count the total amount of work, then report progress with mcp__task-progress__set_tasks (not update_plan), even for a single step. List the whole task in one call. After each step finishes, update it (mark that step completed and the next one in_progress, with total and done) by attaching the call to your next tool calls in the same turn, so the bar keeps moving without an extra turn; never send a call on its own just to update, and never leave the steps unreported until the end.',
     panelTitle: (d, n) => `Task progress ${d}/${n}`,
     allDone: 'All done',
     working: 'Working',
@@ -56,6 +59,7 @@ const STR: Record<Lang, Strings> = {
     outside: n => `+${n} not shown (/task-progress list)`,
     noTasks: 'No tasks right now.',
     elapsed: t => `${t} elapsed`,
+    toolsUsed: n => `${n} tool${n === 1 ? '' : 's'}`,
     took: t => `took ${t}`,
     unsettled: 'not settled',
     eta: t => `~${t} left`,
@@ -75,7 +79,7 @@ const STR: Record<Lang, Strings> = {
   },
   'zh-TW': {
     guide:
-      '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。一次呼叫就把整個任務的步驟列完，之後只在換階段時才更新，不要每做完一小步就更新；可以的話與其他工具放在同一個回合送出。',
+      '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。一次呼叫就把整個任務的步驟列完；之後每完成一個步驟，就把它標成完成、下一步標成進行中（附 total 與 done），並附在下一批工具的同一個回合送出，進度才會一路前進又不多花回合；不要為了更新而單獨佔一個回合，也不要拖到最後才一次回報。',
     panelTitle: (d, n) => `任務進度 ${d}/${n}`,
     allDone: '全部完成',
     working: '處理中',
@@ -83,6 +87,7 @@ const STR: Record<Lang, Strings> = {
     outside: n => `另有 ${n} 個未列出（/task-progress list）`,
     noTasks: '目前沒有任務。',
     elapsed: t => `已 ${t}`,
+    toolsUsed: n => `${n} 個工具`,
     took: t => `用 ${t}`,
     unsettled: '未結算',
     eta: t => `預估剩餘 ~${t}`,
@@ -168,6 +173,7 @@ export const register: Register = (on, options) => {
     if ((e as { agentId?: string }).agentId === undefined) {
       const at = await $.clock.now()
       await update($, turnAtom, () => at)
+      await update($, toolCountAtom, () => 0)
     }
     return next(e)
   })
@@ -259,6 +265,12 @@ export const register: Register = (on, options) => {
     ]
     await update($, tasksAtom, () => demo)
     return { text: s.demoLoaded }
+  })
+
+  // 每個工具呼叫都數一次（回報進度本身不算）。這是 plugin 自己算的，完全不經過模型
+  on('tool.call', async ($, e, next) => {
+    if ((e.tool as string) !== 'mcp__task-progress__set_tasks') await update($, toolCountAtom, n => n + 1)
+    return next(e)
   })
 
   // 每次待辦清單更新時，記錄各任務的開始／完成時間
@@ -388,6 +400,7 @@ export const register: Register = (on, options) => {
     const tasks = await read($, tasksAtom)
     const startedAt = style.working ? await read($, turnAtom) : null
     const tick = await read($, tickAtom)
+    const toolN = await read($, toolCountAtom)
     if (e.props.hasSurvey || (tasks.length === 0 && startedAt === null)) return next(e)
 
     const now = await $.clock.now()
@@ -534,7 +547,7 @@ export const register: Register = (on, options) => {
           <Box width={5}>
             <Text bold>—</Text>
           </Box>
-          <Text dimColor>{s.elapsed(`${elapsed}s`)}</Text>
+          <Text dimColor>{`${toolN > 0 ? `${s.toolsUsed(toolN)} · ` : ''}${s.elapsed(`${elapsed}s`)}`}</Text>
         </Box>
       )
     if (tasks.length === 0) return <Box flexDirection="column" paddingX={1}>{workingRow}</Box>

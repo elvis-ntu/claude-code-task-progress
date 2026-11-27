@@ -1,6 +1,6 @@
 {
   "name": "task-progress",
-  "version": "0.2.8",
+  "version": "0.2.9",
   "description": "Shows a progress bar, percentage and estimated time left for every task above the prompt.",
   "types": "./types/index.d.ts",
   "userConfig": {
