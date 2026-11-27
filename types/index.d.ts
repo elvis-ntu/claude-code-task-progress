@@ -9,6 +9,8 @@ export type ProgressTask = {
   status: 'pending' | 'in_progress' | 'completed'
   startedAt: number | null
   doneAt: number | null
+  /** Set at the end of a turn for a task that never started: the model forgot to report it */
+  unsettled?: boolean
 }
 
 declare module 'claude-code' {

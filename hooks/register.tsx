@@ -28,6 +28,8 @@ type Strings = {
   elapsed: (t: string) => string
   /** 已完成的任務花了多久 */
   took: (t: string) => string
+  /** 回答結束時仍沒開始的任務 */
+  unsettled: string
   eta: (t: string) => string
   /** 內建轉圈提示後面接的任務進度 */
   spinner: (done: number, total: number, cur?: { done: number; total: number }) => string
@@ -55,6 +57,7 @@ const STR: Record<Lang, Strings> = {
     noTasks: 'No tasks right now.',
     elapsed: t => `${t} elapsed`,
     took: t => `took ${t}`,
+    unsettled: 'not settled',
     eta: t => `~${t} left`,
     spinner: (d, n, cur) => `… tasks ${d}/${n}${cur ? `, current ${cur.done}/${cur.total}` : ''}`,
     updated: n => `Updated ${n} task${n === 1 ? '' : 's'}`,
@@ -81,6 +84,7 @@ const STR: Record<Lang, Strings> = {
     noTasks: '目前沒有任務。',
     elapsed: t => `已 ${t}`,
     took: t => `用 ${t}`,
+    unsettled: '未結算',
     eta: t => `預估剩餘 ~${t}`,
     spinner: (d, n, cur) => `… 任務 ${d}/${n}${cur ? `，進行中 ${cur.done}/${cur.total}` : ''}`,
     updated: n => `已更新 ${n} 個任務`,
@@ -168,7 +172,21 @@ export const register: Register = (on, options) => {
     return next(e)
   })
   on('turn.complete', async ($, e, next) => {
-    if ((e as { agentId?: string }).agentId === undefined) await update($, turnAtom, () => null)
+    if ((e as { agentId?: string }).agentId === undefined) {
+      await update($, turnAtom, () => null)
+      // 回答結束時結算漏報的任務，進度條才不會卡住：
+      // 進行中的視為做完（補上完成時間）；從沒開始的標成「未結算」，不假裝完成
+      const at = await $.clock.now()
+      await update($, tasksAtom, prev =>
+        prev.map(t =>
+          t.status === 'in_progress'
+            ? { ...t, status: 'completed' as const, doneAt: at, pct: undefined, done: undefined, total: undefined }
+            : t.status === 'pending'
+              ? { ...t, unsettled: true }
+              : t,
+        ),
+      )
+    }
     return next(e)
   })
 
@@ -298,12 +316,19 @@ export const register: Register = (on, options) => {
     const now = await $.clock.now()
     // 這次呼叫裡剛變成完成的任務與耗時，附在工具結果後面
     const finished: { title: string; ms: number }[] = []
+    const turnStart = (await read($, turnAtom)) ?? now
     await update($, tasksAtom, prev => {
       finished.length = 0
       const out: ProgressTask[] = input.reset ? [] : [...prev]
       for (const t of list) {
         const idx = out.findIndex(p => p.title === t.title)
-        const old = idx >= 0 ? out[idx] : undefined
+        let old = idx >= 0 ? out[idx] : undefined
+        // 沒經過「進行中」就直接完成：開始時間補成上一個完成任務的完成時間（沒有就用本輪開始），避免耗時變成 0s
+        if (t.status === 'completed' && !old?.startedAt) {
+          const prevDone = out.reduce((m, p) => (p.doneAt !== null && p.title !== t.title ? Math.max(m, p.doneAt) : m), 0)
+          const start = Math.min(prevDone > 0 ? prevDone : turnStart, now)
+          old = { title: t.title, status: old?.status ?? 'pending', startedAt: start, doneAt: null }
+        }
         if (t.status === 'completed' && old && old.status !== 'completed' && old.startedAt) {
           finished.push({ title: t.title, ms: now - old.startedAt })
         }
@@ -611,6 +636,7 @@ function rowTime(t: ProgressTask, now: number, s: Strings): string {
     return `${n}${s.elapsed(fmt(now - t.startedAt))}`
   }
   if (t.status === 'completed' && t.startedAt && t.doneAt) return s.took(fmt(t.doneAt - t.startedAt))
+  if (t.unsettled) return s.unsettled
   return ''
 }
 
