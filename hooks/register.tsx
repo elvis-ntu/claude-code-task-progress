@@ -48,7 +48,7 @@ type Strings = {
 const STR: Record<Lang, Strings> = {
   en: {
     guide:
-      'Whenever this reply will use any tool, first count the total amount of work, then report progress with mcp__task-progress__set_tasks (not update_plan), even for a single step.',
+      'Whenever this reply will use any tool, first count the total amount of work, then report progress with mcp__task-progress__set_tasks (not update_plan), even for a single step. List the whole task in one call, then update again only when a stage changes, not after every small step; send the call in the same turn as other tools when you can.',
     panelTitle: (d, n) => `Task progress ${d}/${n}`,
     allDone: 'All done',
     working: 'Working',
@@ -75,7 +75,7 @@ const STR: Record<Lang, Strings> = {
   },
   'zh-TW': {
     guide:
-      '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。',
+      '只要這次回答會用到工具，就先數出總量，並用 mcp__task-progress__set_tasks 回報進度（不要用 update_plan）；一個步驟也要回報。一次呼叫就把整個任務的步驟列完，之後只在換階段時才更新，不要每做完一小步就更新；可以的話與其他工具放在同一個回合送出。',
     panelTitle: (d, n) => `任務進度 ${d}/${n}`,
     allDone: '全部完成',
     working: '處理中',
